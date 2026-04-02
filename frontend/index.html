@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Registry Scraper | Dashboard</title>
+    <link rel="stylesheet" href="styles.css?v=1.0.1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+    <script src="auth.js?v=1.0.1"></script>
+    <script>
+        // Immediate redirect if not logged in to prevent flash
+        if (!localStorage.getItem('token')) {
+            window.location.href = '/login.html';
+        }
+    </script>
+</head>
+<body>
+    <main class="container">
+        <header>
+            <nav class="top-nav">
+                <div class="nav-left"></div>
+                
+                <div class="nav-center">
+                    <div class="logo-container">
+                        <div class="logo">
+                            <span class="icon">🔍</span>
+                            <h1>BizScraper <span>AI</span></h1>
+                        </div>
+                        <p class="subtitle">Next-generation corporate intelligence & automated data extraction</p>
+                    </div>
+                </div>
+
+                <div class="nav-right" id="user-menu">
+                    <div class="user-info">
+                        <span id="nav-username">User</span>
+                        <div class="user-avatar">👤</div>
+                    </div>
+                    <button id="logout-btn" class="btn-secondary">Logout</button>
+                </div>
+            </nav>
+        </header>
+
+        <div class="main-layout">
+            <aside class="sidebar glass" id="history-sidebar">
+                <div class="sidebar-header">
+                    <h3>Search History</h3>
+                    <button id="clear-history-btn" title="Clear History">🗑️</button>
+                </div>
+                <div id="history-list" class="history-list">
+                    <!-- Populated by JS -->
+                    <div class="empty-history">No history yet</div>
+                </div>
+            </aside>
+
+            <div class="content">
+
+
+        <section class="controls glass">
+            <div class="control-grid">
+                <div class="control-group">
+                    <label for="country-select">Country</label>
+                    <div class="multi-select-container" id="country-container">
+                        <div id="country-select-trigger" class="select-trigger">
+                            <span id="country-select-label">Select a country</span>
+                        </div>
+                        <div id="country-options" class="options-dropdown hidden">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="control-group">
+                    <label for="state-select">Regions / States</label>
+                    <div class="multi-select-container">
+                        <div id="state-select-trigger" class="select-trigger">
+                            <span id="state-select-label">Select regions</span>
+                        </div>
+
+                        <div id="state-options" class="options-dropdown hidden">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                    <div id="state-warning" class="validation-warning hidden">Please select a country first</div>
+                </div>
+
+
+                <div class="actions">
+                    <label class="alignment-label">&nbsp;</label>
+                    <button id="start-scrape-btn" class="btn-primary" disabled>
+                        <span class="btn-text">Start Scrape</span>
+                        <div class="spinner hidden"></div>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section class="stats-bar hidden">
+            <div class="stat-card glass">
+                <span class="stat-label">Total Records</span>
+                <span id="stat-total" class="stat-value">0</span>
+            </div>
+            <div class="stat-card glass">
+                <span class="stat-label">Recent Scrape</span>
+                <span id="stat-recent" class="stat-value">0</span>
+            </div>
+            <div class="stat-card glass">
+                <span class="stat-label">Duplicates Skipped</span>
+                <span id="stat-skipped" class="stat-value">0</span>
+            </div>
+        </section>
+
+        <section class="data-table-container glass hidden">
+
+            <div class="table-header">
+                <h2>Extracted Data</h2>
+                <div class="table-actions">
+                    <input type="text" id="table-search" placeholder="Search businesses...">
+                    <button id="refresh-btn" title="Refresh Table">🔄</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table id="business-table">
+                    <thead>
+                        <tr>
+                            <th>Company Name</th>
+                            <th>Reg Number</th>
+                            <th>Reg Date</th>
+                            <th>Status</th>
+                            <th>Address</th>
+                            <th>Country</th>
+                            <th>State</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Website</th>
+                            <th>CEO / Founder</th>
+                            <th>CEO Email</th>
+                            <th>LinkedIn</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="business-list">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+                <div id="no-data" class="empty-state hidden">
+                    <p>No records found. Start a scrape to collect data.</p>
+                </div>
+                <div id="table-loading" class="table-overlay hidden">
+                    <div class="spinner large"></div>
+                </div>
+            </div>
+            <div class="table-footer">
+                <div class="pagination">
+                    <button id="prev-page" disabled>Previous</button>
+                    <div class="pagination-center">
+                        <span id="page-info">Page 1 of 1</span>
+                    </div>
+                    <button id="next-page" disabled>Next</button>
+                </div>
+                <div class="footer-actions">
+                    <button id="export-csv-btn" class="btn-primary hidden">
+                        <span>Export Scraped Data (CSV)</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+            </div> <!-- End content -->
+        </div> <!-- End main-layout -->
+    </main>
+
+    <div id="toast-container"></div>
+
+    <script src="app.js?v=1.0.1"></script>
+</body>
+</html>

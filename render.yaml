@@ -1,0 +1,47 @@
+# Render.com Infrastructure-as-Code configuration
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: bizscraper-ai
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+
+    # Auto-deploy when you push to the main branch
+    autoDeploy: true
+
+    # Health check endpoint (defined in main.py)
+    healthCheckPath: /health
+
+    # Resource plan — free tier works for demo/dev
+    plan: free
+
+    # Persistent disk to survive restarts (SQLite database)
+    # Note: On free tier the disk is NOT persistent across deploys.
+    # Upgrade to "starter" plan to retain data between deploys.
+    disk:
+      name: bizscraper-data
+      mountPath: /app/backend
+      sizeGB: 1
+
+    # Environment variables
+    # Set the actual values on the Render dashboard (Settings → Environment)
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////app/backend/businesses.db
+
+      # Auth secret — generate a strong random string
+      - key: SECRET_KEY
+        generateValue: true
+
+      # Optional API keys — leave blank if not using enrichment features
+      - key: COMPANIES_HOUSE_API_KEY
+        value: ""
+      - key: OPENCORPORATES_API_KEY
+        value: ""
+      - key: HUNTER_API_KEY
+        value: ""
+      - key: PHANTOMBUSTER_API_KEY
+        value: ""
+      - key: ZYTE_API_KEY
+        value: ""

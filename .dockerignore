@@ -1,0 +1,77 @@
+# Python
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/**/*.pyc
+backend/.pytest_cache/
+backend/.mypy_cache/
+
+# Virtual environment (never include, Docker installs its own deps)
+backend/venv/
+backend/.venv/
+
+# Log files (these are huge — 24MB+ each)
+backend/*.log
+backend/enricher_stdout.log
+backend/enrichment.log
+backend/master_enrichment.log
+
+# Local databases (database is created fresh on startup via init_db())
+# Comment these out if you want to ship pre-populated data inside the image
+# backend/businesses.db
+# backend/business_registry.db
+# businesses.db
+
+# Development/test scripts (not needed in production image)
+backend/test_*.py
+backend/bulk_enrich.py
+backend/clean_*.py
+backend/cleanup_*.py
+backend/deep_clean_addresses.py
+backend/deep_enrichment_v3.py
+backend/deep_web_enricher.py
+backend/direct_fill_blanks.py
+backend/fast_enrichment_v4.py
+backend/fast_repair.py
+backend/final_validation.py
+backend/fix_*.py
+backend/mass_enrich.py
+backend/mass_enrichment_v2.py
+backend/master_enricher.py
+backend/repair_*.py
+backend/replace_synthetic.py
+backend/scrapy_*.py
+backend/strict_deep_enricher.py
+backend/targeted_site_scraper.py
+backend/update_*.py
+backend/verify_updates.py
+backend/export_structured_data.py
+
+# Secrets
+.env
+*.env
+
+# Git
+.git/
+.gitignore
+
+# Node (root level package stuff)
+node_modules/
+package-lock.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Misc
+*.md
+table_test.json
+test_scraper.py
+README.md
