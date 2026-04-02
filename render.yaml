@@ -19,10 +19,7 @@ services:
     # Persistent disk to survive restarts (SQLite database)
     # Note: On free tier the disk is NOT persistent across deploys.
     # Upgrade to "starter" plan to retain data between deploys.
-    disk:
-      name: bizscraper-data
-      mountPath: /app/backend
-      sizeGB: 1
+    # (Disk configuration removed for Free Tier compatibility)
 
     # Environment variables
     # Set the actual values on the Render dashboard (Settings → Environment)
