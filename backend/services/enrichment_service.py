@@ -429,6 +429,7 @@ def enrich_business(db: Session, business_id: int) -> bool:
     _set("description",   info.get("description"))
     _set("industry",      info.get("industry"))
     _set("employee_count", info.get("employee_count"))
+    _set("revenue",       info.get("revenue"))
 
     # Optional Hunter CEO email (only if key is set)
     if domain and HUNTER_API_KEY:

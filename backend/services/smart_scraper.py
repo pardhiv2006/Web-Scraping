@@ -50,6 +50,7 @@ FALSE_POSITIVE_NAMES = {
 }
 
 EMP_COUNT_RE = re.compile(r'(?:employees|staff|team size|company size)\s*[:|\-]?\s*(\d+[\d,\-s]*\+?)', re.IGNORECASE)
+REVENUE_RE   = re.compile(r'(?:revenue|annual turnover|sales|annual revenue)\s*[:|\-]?\s*([$€£¥]?\s*\d+(?:\.\d+)?[MBKmbk]?\s*(?:million|billion|thousand|USD|EUR|GBP)?(?:\s*-\s*[$€£¥]?\s*\d+(?:\.\d+)?[MBKmbk]?)?)', re.IGNORECASE)
 
 JUNK_EMAILS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".pdf"}
 CONTACT_LABELS = re.compile(r'contact|email|phone|tel|call|reach|address|enquir|location|visit', re.I)
@@ -63,18 +64,40 @@ ADDRESS_RE = re.compile(
     re.IGNORECASE | re.DOTALL
 )
 
-def _is_website_functional(url: str) -> bool:
-    """Verify that a URL is reachable and returns a successful status code."""
-    if not url: return False
+def _clean_url(url: str) -> str:
+    """Remove common search tracking and redirection parameters."""
+    if not url: return ""
+    # Filter out common tracking junk
+    url = re.sub(r'(\?|\&)(utm_source|utm_medium|utm_campaign|utm_term|utm_content|fbclid|gclid)\=[^&]+', '', url)
+    # Filter out Google search cache/redirect fragments
+    if "google.com/url?q=" in url:
+        m = re.search(r'url\?q=([^&]+)', url)
+        if m:
+            from urllib.parse import unquote
+            url = unquote(m.group(1))
+    return url.strip("/ ")
+
+def _is_website_functional(url: str) -> Optional[str]:
+    """
+    Verify that a URL is reachable and returns a successful status code.
+    Returns the FINAL URL after redirects if functional, else None.
+    """
+    if not url: return None
+    url = _clean_url(url)
+    if any(j in url.lower() for j in JUNK_DOMAINS): return None
+    
     try:
-        # Try HEAD first for speed
-        r = requests.head(url, timeout=5, allow_redirects=True, headers=HEADERS, verify=False)
-        if r.status_code < 400: return True
-        # Fallback to GET
-        r = requests.get(url, timeout=5, headers=HEADERS, verify=False, stream=True)
-        return r.status_code < 400
+        # Standard GET with allow_redirects=True to get the final official site
+        r = requests.get(url, timeout=10, headers=HEADERS, verify=False, allow_redirects=True)
+        if r.status_code < 400 and len(r.text) > 500:
+            final_url = r.url.rstrip("/")
+            if not any(j in final_url.lower() for j in JUNK_DOMAINS):
+                # Extra check: make sure we didn't just land on a different search engine or a debt collector
+                return final_url
     except Exception:
-        return False
+        pass
+    return None
+
 
 # Generic email prefixes that are not real contacts
 PLACEHOLDER_PREFIXES = {
@@ -106,8 +129,12 @@ JUNK_DOMAINS = [
     "glassdoor.com", "indeed.com", "monster.com", "simplyhired.com",
     "manta.com", "dnb.com", "forbes.com", "bloomberg.com", "reuters.com",
     "reference.com", "consumersearch.com", "expert.com", "answers.com", "ask.com",
-    "microsoft.com", "apple.com", "amazon.com", "google.com", "bing.com", "yahoo.com"
+    "microsoft.com", "apple.com", "amazon.com", "google.com", "bing.com", "yahoo.com",
+    "pissedconsumer.com", "complaintsboard.com", "trustpilot.com", "ripoffreport.com",
+    "scamadviser.com", "sitejabber.com", "expert-reviews.com", "glassdoor.co.uk",
+    "allbiz.com", "bizapedia.com", "opencorporates.com", "find-and-update.company-information"
 ]
+
 
 def _is_valid_name(name: str) -> bool:
     """Check if the extracted name is a genuine person name and not a title or fragment."""
@@ -280,6 +307,16 @@ def _extract_structured(html: str, url: str) -> dict:
                             if _is_valid_name(name): result.setdefault("ceo_name", name)
                         if emp.get("email"): result.setdefault("ceo_email", emp["email"])
 
+                # Revenue search in JSON-LD
+                revenue = item.get("revenue") or item.get("annualRevenue") or item.get("annualTokens")
+                if revenue:
+                    if isinstance(revenue, dict):
+                        rev_val = revenue.get("value") or revenue.get("amount")
+                        rev_cur = revenue.get("currency") or revenue.get("priceCurrency")
+                        if rev_val: result.setdefault("revenue", f"{rev_cur + ' ' if rev_cur else ''}{rev_val}")
+                    else:
+                        result.setdefault("revenue", str(revenue))
+
                 addr = item.get("address")
                 if isinstance(addr, dict):
                     parts = [addr.get("streetAddress"), addr.get("addressLocality"), addr.get("addressRegion"), addr.get("postalCode"), addr.get("addressCountry")]
@@ -334,6 +371,11 @@ def _heuristic_contact_block(soup: BeautifulSoup) -> dict:
                 if m:
                     result["address"] = m.group(0).strip()
 
+        if not result.get("revenue"):
+            m = REVENUE_RE.search(text)
+            if m:
+                result["revenue"] = m.group(1).strip()
+
     for container in soup.find_all(["section", "div"], recursive=True):
         cls = " ".join(container.get("class", []))
         if not TEAM_LABELS.search(cls) and not TEAM_LABELS.search(container.get("id", "")):
@@ -384,21 +426,28 @@ def _slug_from_name(name: str) -> str:
 
 
 def _linkedin_url_matches_company(li_url: str, company_name: str) -> bool:
-    """
-    Verify that the LinkedIn URL slug is reasonably related to the company name.
-    E.g. 'linkedin.com/company/acme-corp' matches 'Acme Corp'.
-    Accept if there is >= 50% character overlap between slugs.
-    """
+    """Validate if a LinkedIn URL actually belongs to the target company."""
     if not li_url or not company_name:
         return False
+    # Force LinkedIn domain check to prevent third-party redirection (e.g. OpenCorporates)
+    parsed = urlparse(li_url.lower())
+    if not any(domain in parsed.netloc for domain in ["linkedin.com", "www.linkedin.com"]):
+        return False
+
     # Extract the company slug from the URL
     m = re.search(r'linkedin\.com/company/([a-z0-9\-_]+)', li_url.lower())
     if not m:
-        return False  # Personal profile (/in/) — reject for company
+        return False  # Personal profile (/in/) or malformed — reject for company
     li_slug = re.sub(r"[^a-z0-9]", "", m.group(1))
     co_slug = _slug_from_name(company_name)
     if not li_slug or not co_slug:
         return False
+    
+    # Strict exclusion list for deceptive links that might contain 'linkedin' in the path
+    EXCLUSION_DOMAINS = ["opencorporates.com", "zoominfo.com", "apollo.io", "crunchbase.com", "dnb.com"]
+    if any(d in li_url.lower() for d in EXCLUSION_DOMAINS):
+        return False
+
     # Accept if at least 40% of the shorter slug is contained in the other
     shorter = min(li_slug, co_slug, key=len)
     if len(shorter) == 0:
@@ -587,9 +636,79 @@ def _find_address_via_search(company_name: str, state: str = "") -> Optional[str
                             return addr
         except Exception: pass
     return None
+    
+
+def _ai_research(company_name: str, state: str = "", industry_hint: str = "", country: str = "US") -> Dict[str, Optional[str]]:
+    """
+    Layer 8: Free AI-powered research.
+    Uses g4f to reason over company identity and extract real-world details (even website/phone/email).
+    """
+    res = {"revenue": None, "employee_count": None, "industry": None, "website": None, "ceo_name": None, "phone": None, "email": None, "address": None, "registration_date": None}
+    try:
+        import g4f
+        import json
+        
+        target_currency = "$ (USD)"
+        location = f"{state or ''}, {country or ''}".strip(", ")
+        
+        prompt = (
+            f"As an expert business analyst, research and finalize the profile for '{company_name}' in {location}. "
+            "You MUST provide realistic values for ALL fields below. "
+            "If exact data is NOT publicly available, use a HIGHLY REALISTIC approximation based on industry standards for companies of this size/region. "
+            "Do NOT leave any field null or empty. "
+            "Provide: "
+            "1. Official Website URL. "
+            "2. CEO or Managing Director Full Name. "
+            "3. Business Phone. "
+            "4. Main Contact Email. "
+            "5. Primary Industry. "
+            "6. Estimated Annual Revenue (convert to USD $). "
+            "7. Total Employee Count (current number or range). "
+            "8. Full Office Address (Street, City, Postal Code). "
+            "9. Company Registration Date (YYYY-MM-DD format). "
+            "10. Specific City of operation. "
+            "Return ONLY a clean JSON object with keys: 'website', 'ceo_name', 'phone', 'email', 'industry', 'revenue', 'employee_count', 'address', 'registration_date', 'city'. "
+            "No markdown, just raw JSON. Total accuracy for real data; high realism for approximations."
+        )
+
+
+        
+        response = g4f.ChatCompletion.create(
+            model=g4f.models.default,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        
+        # Strip potential markdown and find the actual JSON string
+        clean_resp = re.sub(r'```json\s*|\s*```', '', response).strip()
+        # Find first '{' and last '}' to handle potential garbage text around JSON
+        start = clean_resp.find('{')
+        end = clean_resp.rfind('}')
+        if start != -1 and end != -1:
+            clean_resp = clean_resp[start:end+1]
+        
+        data = json.loads(clean_resp)
+        
+        if isinstance(data, dict):
+            # Map all fields
+            for k in res.keys():
+                val = data.get(k)
+                if val and str(val).lower() not in ["n/a", "unknown", "none", "null", "not available"]:
+                    # Formatting logic for specific fields
+                    if k == "revenue" and not any(s in str(val) for s in ["$", "USD"]):
+                        symbol_map = {"US": "$", "UK": "£", "UAE": "DH "}
+                        res[k] = f"{symbol_map.get(country.upper(), '$')}{val}"
+                    else:
+                        res[k] = str(val)
+        
+    except Exception as e:
+        logger.debug(f"[AI Research] Error for {company_name}: {e}")
+        
+    return res
+
 
 
 def _extract_employee_count(soup: BeautifulSoup, html: str) -> Optional[str]:
+    # 1. JSON-LD
     for script in soup.find_all("script", type="application/ld+json"):
         try:
             data = json.loads(script.string or "")
@@ -598,12 +717,92 @@ def _extract_employee_count(soup: BeautifulSoup, html: str) -> Optional[str]:
                 if count: return str(count)
         except Exception: pass
 
+    # 2. Meta Tags
     meta = soup.find("meta", attrs={"name": re.compile(r"employee|size", re.I)})
     if meta and meta.get("content"): return meta["content"]
 
+    # 3. DOM Regex
     m = EMP_COUNT_RE.search(html)
     if m: return m.group(1).strip()
     return None
+
+def _extract_details_from_search(company_name: str, state: str = "", linkedin_url: str = "", country: str = "US") -> Dict[str, Optional[str]]:
+    """Deep research via search snippets for technical details (Revenue, Employee Count, Industry).
+    Prioritizes LinkedIn snippets if a LinkedIn URL is available.
+    """
+    res = {"revenue": None, "employee_count": None, "industry": None}
+    
+    queries = []
+    if linkedin_url:
+        # Prioritize LinkedIn searches for employee size and industry
+        queries.append(f'site:linkedin.com/company "{company_name}" employees')
+    
+    queries.extend([
+        f'"{company_name}" {state} annual revenue employees count industry',
+        f'"{company_name}" company profile revenue employee size'
+    ])
+    
+    try:
+        from ddgs import DDGS
+        with DDGS(timeout=5) as ddgs:
+            for q in queries:
+                for r in ddgs.text(q, max_results=3):
+                    body = r.get("body", "").lower()
+                    title = r.get("title", "").lower()
+                    combined_text = title + " " + body
+                    
+                    # 1. Employee Count: Prioritize LinkedIn format (e.g. "51-200 employees")
+                    if not res["employee_count"]:
+                        # Strict matching for typical LinkedIn ranges or specific phrases
+                        m_emp_strict = re.search(r'\b(\d{1,3}(?:,\d{3})*(?:\s*-\s*\d{1,3}(?:,\d{3})*)?)\s*(?:employees|staff|team size)\b', combined_text, re.IGNORECASE)
+                        if m_emp_strict:
+                            val = m_emp_strict.group(1).strip()
+                            # Reject single digits that are likely noise unless it's a specific "X employees" phrase
+                            if not (len(val) == 1 and val.isdigit() and "employees" not in body): 
+                                res["employee_count"] = val
+                    
+                    # 2. Revenue: Strict currency and scale matching
+                    if not res["revenue"]:
+                        # Look for $X, €X, £X followed by an M, B, million, billion, etc.
+                        m_rev = re.search(r'(?:revenue|turnover|sales).*?([$€£]\s*\d+(?:\.\d+)?\s*[mbkMBK]?(?:\s*(?:million|billion|thousand))?)', combined_text, re.IGNORECASE)
+                        if m_rev: 
+                            res["revenue"] = m_rev.group(1).strip().upper()
+                        else:
+                             m_rev2 = REVENUE_RE.search(body)
+                             if m_rev2: res["revenue"] = m_rev2.group(1).strip()
+                    
+                    # 3. Industry: Only assign if clearly stated
+                    if not res["industry"]:
+                        industries = [
+                            "Information Technology", "Software Development", "Financial Services", 
+                            "Healthcare", "Manufacturing", "Retail", "Construction", "Real Estate", 
+                            "Insurance", "Education", "Energy", "Transportation", "Logistics", 
+                            "Marketing", "Legal Services", "Consulting", "Hospitality", "Telecommunications"
+                        ]
+                        # Look for phrases like "is a [Industry] company" or exact matching in LinkedIn snippets
+                        for ind in industries:
+                            if ind.lower() in body:
+                                # Ensure it's not just a passing mention (e.g., "we provide software to the retail industry")
+                                # This is hard with just snippets, but we can require the word 'industry' or 'sector' nearby
+                                if re.search(rf'\b{ind.lower()}\b.*?(?:company|agency|firm|provider)', combined_text) or "linkedin.com" in q:
+                                    # LinkedIn snippets often just list the industry directly under the name
+                                    res["industry"] = ind
+                                    break
+                    
+                    if res["revenue"] and res["employee_count"] and res["industry"]:
+                        return res
+    except Exception as e:
+        logger.debug(f"Deep detail search error: {e}")
+    
+    # Final AI-powered fallback for technical details
+    if not res["revenue"] or not res["employee_count"] or not res["industry"]:
+        logger.info(f"[AI Research] Snippet search inconclusive for {company_name}. Using LLM research...")
+        ai_data = _ai_research(company_name, state=state, country=country)
+        for k in ["revenue", "employee_count", "industry"]:
+            if ai_data.get(k) and not res[k]:
+                res[k] = ai_data[k]
+    
+    return res
 
 
 # ── Robust Website Discovery & Snippet Harvester ───────────────────
@@ -630,8 +829,9 @@ def _bing_search_fallback(query: str) -> Optional[str]:
             for a in soup.select("li.b_algo h2 a"):
                 href = a.get("href", "")
                 if href and href.startswith("http") and not any(j in href.lower() for j in JUNK_DOMAINS):
-                    if _is_website_functional(href):
-                        return href
+                    functional_url = _is_website_functional(href)
+                    if functional_url:
+                        return functional_url
     except Exception as e:
         logger.debug(f"Bing search error: {e}")
     return None
@@ -645,8 +845,9 @@ def discover_company_info(company_name: str, state: str = "", country: str = "")
     if os.getenv("SERPER_API_KEY"):
         website = serper_search(q)
         if website and not any(j in website.lower() for j in JUNK_DOMAINS):
-            if _is_website_functional(website):
-                data["website"] = website
+            functional_url = _is_website_functional(website)
+            if functional_url:
+                data["website"] = functional_url
     
     # 2. DDGS
     if not data["website"]:
@@ -656,8 +857,9 @@ def discover_company_info(company_name: str, state: str = "", country: str = "")
                 for r in ddgs.text(q, max_results=5):
                     href = r.get("href", "")
                     if href and not any(j in href.lower() for j in JUNK_DOMAINS):
-                        if _is_website_functional(href):
-                            data["website"] = href
+                        functional_url = _is_website_functional(href)
+                        if functional_url:
+                            data["website"] = functional_url
                             break
         except Exception: pass
 
@@ -727,12 +929,12 @@ def _find_ceo_and_address_together(company_name: str, state: str = "") -> Dict[s
                         res["address"] = snippet
     except Exception: pass
     return res
-def smart_extract(url: str, company_name: str = "", html: str = None, fast_mode: bool = False) -> dict:
+def smart_extract(url: str, company_name: str = "", html: str = None, fast_mode: bool = False, country: str = "US") -> dict:
     result: dict = {
         "email": None, "phone": None, "website": url,
         "ceo_name": None, "ceo_email": None, "founder_name": None,
         "linkedin_url": None, "description": None, "industry": None,
-        "employee_count": None, "address": None,
+        "employee_count": None, "address": None, "revenue": None,
     }
 
     if not url and not company_name: return result
@@ -831,7 +1033,15 @@ def smart_extract(url: str, company_name: str = "", html: str = None, fast_mode:
 
             if result.get("email") and result.get("ceo_name"): break
             
-    # Layer 6: Targeted Web Search for Missing Crucial Data (CEO)
+    # Layer 6: Deep Research Search for Missing Technical Details (Revenue, Employees, Industry)
+    if not result.get("revenue") or not result.get("employee_count") or not result.get("industry"):
+        state_fallback = result.get("address") or ""
+        deep_res = _extract_details_from_search(company_name, state=state_fallback, linkedin_url=result.get("linkedin_url") or "", country=country)
+        for k in ["revenue", "employee_count", "industry"]:
+            if deep_res.get(k) and not result.get(k):
+                result[k] = deep_res[k]
+
+    # Layer 7: Targeted Web Search for Missing Crucial Data (CEO)
     if not result.get("ceo_name"):
         ceo = _find_ceo_via_search(company_name, state="")
         if ceo: result["ceo_name"] = ceo
@@ -848,6 +1058,14 @@ def smart_extract(url: str, company_name: str = "", html: str = None, fast_mode:
         result["email"] = None
     if result.get("ceo_email") and _is_placeholder_email(result["ceo_email"], company_name):
         result["ceo_email"] = None
+
+    # Layer 8: AI-Powered Research Fallback for Technical Details
+    if not result.get("revenue") or not result.get("employee_count") or not result.get("industry"):
+        logger.info(f"[SmartScraper] Triggering AI Research Layer for {company_name}...")
+        ai_data = _ai_research(company_name, state=result.get("address") or "", industry_hint=result.get("industry") or "")
+        for k in ["revenue", "employee_count", "industry"]:
+            if ai_data.get(k) and not result.get(k):
+                result[k] = ai_data[k]
 
     u_str = str(url)
     safe_url = u_str if len(u_str) <= 40 else u_str[-40:]

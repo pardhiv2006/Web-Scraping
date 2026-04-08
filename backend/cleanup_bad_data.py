@@ -1,108 +1,118 @@
-import sys
+"""
+cleanup_bad_data.py
+===================
+Identifies and resets 'junk' data in the business registry database.
+Junk includes:
+- Search snippets in address fields.
+- Generic placeholders like 'ENG' for city.
+- CEO names that are actually email markers.
+- Templated descriptions that lack real info.
+"""
+
 import os
-import logging
-from sqlalchemy import or_
+import sys
+import sqlite3
+import re
 
-# Ensure backend directory is on the path
-backend_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(backend_dir)
-os.environ["DATABASE_URL"] = f"sqlite:///{os.path.join(backend_dir, 'businesses.db')}"
+DB_PATH = 'businesses.db'
+if not os.path.exists(DB_PATH):
+    # Try backend directory
+    DB_PATH = os.path.join(os.path.dirname(__file__), 'businesses.db')
 
-from database import SessionLocal
-from models.business import Business
-from services.smart_scraper import _is_valid_name
+def is_junk_address(addr: str) -> bool:
+    if not addr: return False
+    addr_lower = addr.lower()
+    junk_keywords = [
+        'trial aims', 'bhp', 'parent company', 'iso 9001', 
+        'privacy & cookies', 'request a quote', 'workspace interiors',
+        'document management', 'digital printing', 'entity #',
+        'limited liability partnership', 'department of state',
+        'obtained a listing', 'london stock exchange', 'dec 16, 2025',
+        'established 1997', 'specialist contractor', 'bounces back',
+        'proposed to', 'high-profile cases', 'million loss', 'ksh',
+        'contact us', 'all rights reserved', 'terms of service', 'amazon\'s',
+        'below is a list', 'retail locations', 'view contact profiles',
+        'sic code', 'naics code', 'show more', 'popular searches',
+        'global inc', 'pte ltd', 'earlier forensics', 'headquartered in washington'
+    ]
+    if any(kw in addr_lower for kw in junk_keywords):
+        return True
+    if len(addr) > 250: # Real addresses are rarely this long
+        return True
+    if len(addr) > 50 and not any(char.isdigit() for char in addr):
+        return True
+    return False
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger("Cleanup")
+def is_junk_city(city: str) -> bool:
+    if not city: return False
+    city_lower = city.lower()
+    placeholders = ['eng', 'sct', 'dxb', 'auh', 'local region', 'nir', 'wales', 'shj', 'as of', 'ltd', 'inc', 'corp', 'dec 16', 'unknown']
+    if city_lower.strip() in placeholders: return True
+    if len(city) < 2 or len(city) > 40: return True
+    if len(city.split()) > 3: return True
+    if re.match(r'^[A-Z0-9]{2,4}\s?[A-Z0-9]{3}$', city.upper()):
+        return True
+    return False
 
-# List of placeholder phone patterns to null out
-PHONES_TO_CLEAN = [
-    "+1 000 000 0000",
-    "000 000 0000",
-    "+971 4 000 0000",
-    "+968-1234-5678"
-]
-
-ADDRESS_PLACEHOLDERS = [
-    "%90 days on each visit%",
-    "%this type of tourist visa%",
-    "%bank balance of 4,000 USD%",
-    "%Dubai, UAE%",
-    "%London, UK%",
-    "%New York, US%",
-    "%Business Area%"
-]
-
-JUNK_WEBSITES = [
-    "https://www.inkl.com/news%",
-    "https://www.ibtimes.com%",
-    "https://www.rak.ae%",
-    "https://rak.ae%",
-    "https://emirates.ae%",
-    "https://www.al-majid.com%",
-    "https://www.habtoor.com%",
-    "https://www.bloomberg.com%",
-    "https://www.crunchbase.com%",
-    "https://www.zoominfo.com%"
-]
+def is_junk_ceo(name: str) -> bool:
+    if not name: return False
+    junk = ['email address', 'contact information', 'unknown', 'pending', 'ceo', 'founder']
+    if any(j in name.lower() for j in junk):
+        return True
+    return False
 
 def cleanup():
-    db = SessionLocal()
-    try:
-        # 1. Clean Websites
-        logger.info("Cleaning junk news/portal websites...")
-        total_ws_cleaned = 0
-        for pattern in JUNK_WEBSITES:
-            count = db.query(Business).filter(Business.website.like(pattern)).update(
-                {Business.website: None}, synchronize_session=False
-            )
-            total_ws_cleaned += count
+    if not os.path.exists(DB_PATH):
+        print(f"Error: {DB_PATH} not found.")
+        return
 
-        # 2. Clean Addresses
-        logger.info("Cleaning placeholder phone numbers...")
-        phone_count = db.query(Business).filter(Business.phone.in_(PHONES_TO_CLEAN)).update(
-            {Business.phone: None}, synchronize_session=False
-        )
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id, company_name, email, phone, website, ceo_name, ceo_email, founder_name, linkedin_url, industry, employee_count, description, city, revenue, address FROM businesses")
+    rows = cursor.fetchall()
+    
+    total_reset = 0
+    
+    for row in rows:
+        biz_id = row[0]
+        updates = {}
         
-        # Also clean any phone that is just zeros/placeholder-like
-        more_phones = db.query(Business).filter(
-            or_(
-                Business.phone.like("%000 000%"),
-                Business.phone.like("%0000000%")
-            )
-        ).update({Business.phone: None}, synchronize_session=False)
+        # Check Address & City
+        if is_junk_address(row[14]):
+            updates['address'] = None
+            print(f"[RESET] Junk Address for ID {biz_id} ({row[1]})")
+            
+        if is_junk_city(row[12]):
+            updates['city'] = None
+            print(f"[RESET] Junk City for ID {biz_id} ({row[1]})")
+            
+        # Check CEO
+        if is_junk_ceo(row[5]):
+            updates['ceo_name'] = None
+            print(f"[RESET] Junk CEO for ID {biz_id} ({row[1]})")
+            
+        # Check Revenue (Raw numbers)
+        if row[13] and row[13].isdigit():
+            # Standardize or reset if it's just a raw large number
+            updates['revenue'] = None 
+            print(f"[RESET] Non-standard Revenue for ID {biz_id} ({row[1]})")
 
-        # 2. Clean Addresses
-        logger.info("Cleaning placeholder addresses...")
-        total_addr_cleaned = 0
-        for pattern in ADDRESS_PLACEHOLDERS:
-            count = db.query(Business).filter(Business.address.like(pattern)).update(
-                {Business.address: None}, synchronize_session=False
-            )
-            total_addr_cleaned += count
-        
-        # 3. Clean CEO names using the smart scraper validation
-        logger.info("Cleaning invalid CEO names/titles using _is_valid_name logic...")
-        businesses_to_check = db.query(Business).filter(Business.ceo_name != None).all()
-        invalid_ceo_count = 0
-        
-        for biz in businesses_to_check:
-            if not _is_valid_name(biz.ceo_name):
-                # Update manually if the name is invalid
-                biz.ceo_name = None
-                invalid_ceo_count += 1
-                
-        db.commit()
-        logger.info(f"Cleanup complete.")
-        logger.info(f"  Phone placeholders removed: {phone_count + more_phones}")
-        logger.info(f"  Address placeholders removed: {total_addr_cleaned}")
-        logger.info(f"  Invalid CEO names removed: {invalid_ceo_count}")
-        
-    except Exception as e:
-        logger.error(f"Cleanup error: {e}")
-        db.rollback()
-    finally:
-        db.close()
+        # Check Description (Template fallback)
+        if row[11] and "is a" in row[11] and "company based in" in row[11] and len(row[11]) < 150:
+            # This looks like the generic template from bulk_fix_all_blanks.py
+            # Only reset if we want to force a real scrape
+            pass 
+
+        if updates:
+            set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+            params = list(updates.values()) + [biz_id]
+            cursor.execute(f"UPDATE businesses SET {set_clause} WHERE id = ?", params)
+            total_reset += 1
+
+    conn.commit()
+    conn.close()
+    print(f"Cleanup complete. {total_reset} records were partially reset.")
 
 if __name__ == "__main__":
     cleanup()

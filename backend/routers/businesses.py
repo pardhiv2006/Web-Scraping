@@ -36,6 +36,32 @@ def get_businesses(
     if states_upper:
         query = query.filter(Business.state.in_(states_upper))
 
+    # Apply strict 100% completeness filter
+    required_string_fields = [
+        Business.registration_date, Business.address, Business.status, 
+        Business.email, Business.phone, Business.website, 
+        Business.ceo_name, Business.ceo_email, Business.founder_name, 
+        Business.linkedin_url, Business.industry, Business.description
+    ]
+    
+    placeholders = ['', '-', 'n/a', 'N/A', 'none', 'None', 'null', 'NULL', 'tbd']
+    
+    for field in required_string_fields:
+        query = query.filter(field.isnot(None), field.notin_(placeholders))
+        
+    # Exclude ranges or fake numbers for exact fields
+    query = query.filter(
+        Business.employee_count.isnot(None),
+        Business.employee_count.notin_(placeholders),
+        ~Business.employee_count.like('%-%')
+    )
+    
+    query = query.filter(
+        Business.revenue.isnot(None),
+        Business.revenue.notin_(placeholders),
+        ~Business.revenue.like('%-%')
+    )
+
     total = query.count()
     records = (
         query.order_by(Business.scraped_at.desc())

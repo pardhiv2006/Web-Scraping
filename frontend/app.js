@@ -280,19 +280,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td>${b.state || '-'}</td>
                 <td>${b.email || '<span class="text-muted">-</span>'}</td>
                 <td>${b.phone || '<span class="text-muted">-</span>'}</td>
-                <td>${b.website ? `<a href="${b.website.startsWith('http') ? b.website : 'https://' + b.website}" target="_blank" class="link-primary" style="font-size: 0.8rem; word-break: break-all;">${b.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]} ⇗</a>` : '<span class="text-muted">-</span>'}</td>
-                <td>
-                    <div style="font-size: 0.85rem;">
-                        ${b.ceo_name ? `<div>${b.ceo_name}</div>` : ''}
-                        ${b.founder_name && b.founder_name !== b.ceo_name ? `<div class="text-muted" style="font-size: 0.75rem;">Founder: ${b.founder_name}</div>` : ''}
-                        ${!b.ceo_name && !b.founder_name ? '<span class="text-muted">-</span>' : ''}
-                    </div>
-                </td>
-                <td>${b.ceo_email
-                    ? `<a href="mailto:${b.ceo_email}" class="link-primary" style="font-size: 0.8rem;">${b.ceo_email}</a>`
-                    : '<span class="text-muted">-</span>'}</td>
-                <td>${b.linkedin_url
-                    ? `<a href="${b.linkedin_url}" target="_blank" class="link-primary" style="font-size: 0.8rem;">LinkedIn ⇗</a>`
+                <td>${(b.website && typeof b.website === 'string') ? `<a href="${b.website.startsWith('http') ? b.website : 'https://' + b.website}" target="_blank" class="link-primary" style="font-size: 0.8rem; word-break: break-all;">${b.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]} ⇗</a>` : '<span class="text-muted">-</span>'}</td>
+                <td>${b.ceo_name ? `<div style="font-size: 0.85rem;">${b.ceo_name}</div>` : '<span class="text-muted">-</span>'}</td>
+                <td>${b.ceo_email ? `<a href="mailto:${b.ceo_email}" class="link-primary" style="font-size: 0.8rem;">${b.ceo_email}</a>` : '<span class="text-muted">-</span>'}</td>
+                <td><span style="font-size: 0.8rem; color: var(--text-dim);">${b.industry || '-'}</span></td>
+                <td><span style="font-size: 0.8rem;">${b.employee_count || b.employee_size || '-'}</span></td>
+                <td><span style="font-size: 0.8rem; font-weight: 600; color: #10b981;">${b.revenue || '-'}</span></td>
+                <td>${(b.linkedin_url && typeof b.linkedin_url === 'string')
+                    ? `<a href="${b.linkedin_url.startsWith('http') ? b.linkedin_url : 'https://' + b.linkedin_url}" target="_blank" class="link-primary" style="font-size: 0.8rem;">LinkedIn ⇗</a>`
                     : '<span class="text-muted">-</span>'}</td>
                 <td>
                     ${b.source_url ? `<a href="${b.source_url}" target="_blank" class="btn-secondary" style="font-size: 10px; padding: 4px 8px;">Source ⇗</a>` : '-'}

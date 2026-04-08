@@ -30,6 +30,7 @@ class Business(Base):
     linkedin_url = Column(String, nullable=True)
     industry = Column(String, nullable=True)
     employee_count = Column(String, nullable=True)
+    revenue = Column(String, nullable=True)
     description = Column(String, nullable=True)
 
     scraped_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -59,6 +60,7 @@ class Business(Base):
             "linkedin_url": self.linkedin_url,
             "industry": self.industry,
             "employee_count": self.employee_count,
+            "revenue": self.revenue,
             "description": self.description,
             "scraped_at": self.scraped_at.isoformat() if self.scraped_at else None,
         }

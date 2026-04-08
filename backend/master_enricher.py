@@ -15,7 +15,42 @@ sys.path.append(backend_dir)
 
 from database import SessionLocal
 from models.business import Business
-from services.smart_scraper import smart_extract, discover_company_info, _is_valid_name, ADDRESS_RE
+from services.smart_scraper import smart_extract, discover_company_info, _is_valid_name, ADDRESS_RE, _ai_research
+
+# --- Junk Detection Logic (Mirrored from cleanup_bad_data.py) ---
+def is_junk_address(addr: str) -> bool:
+    if not addr: return False
+    addr_lower = addr.lower()
+    junk_keywords = [
+        'trial aims', 'bhp', 'parent company', 'iso 9001', 
+        'privacy & cookies', 'request a quote', 'workspace interiors',
+        'document management', 'digital printing', 'entity #',
+        'limited liability partnership', 'department of state',
+        'obtained a listing', 'london stock exchange', 'dec 16, 2025',
+        'established 1997', 'specialist contractor', 'bounces back',
+        'proposed to', 'high-profile cases', 'million loss', 'ksh',
+        'contact us', 'all rights reserved', 'terms of service', 'amazon\'s',
+        'below is a list', 'retail locations', 'view contact profiles',
+        'sic code', 'naics code', 'show more', 'popular searches',
+        'global inc', 'pte ltd', 'earlier forensics', 'headquartered in washington'
+    ]
+    if any(kw in addr_lower for kw in junk_keywords): return True
+    if len(addr) > 250: return True
+    # If it's a long string with no numbers, it's probably not a real address
+    if len(addr) > 50 and not any(char.isdigit() for char in addr): return True
+    return False
+
+def is_junk_city(city: str) -> bool:
+    if not city: return False
+    city_lower = city.lower()
+    placeholders = ['eng', 'sct', 'dxb', 'auh', 'local region', 'nir', 'wales', 'shj', 'as of', 'ltd', 'inc', 'corp', 'dec 16', 'unknown']
+    if city_lower.strip() in placeholders: return True
+    if len(city) < 2 or len(city) > 40: return True
+    # Cities shouldn't have too many words
+    if len(city.split()) > 3: return True
+    # Postcode check
+    if re.match(r'^[A-Z0-9]{2,4}\s?[A-Z0-9]{3}$', city.upper()): return True
+    return False
 
 # Setup logging
 logging.basicConfig(
@@ -29,24 +64,19 @@ logging.basicConfig(
 logger = logging.getLogger("MasterEnricher")
 
 # --- Logic for City Extraction ---
-def extract_city(address: str) -> Optional[str]:
-    if not address:
+def extract_city(address: str, company_name: str = "") -> Optional[str]:
+    if not address or is_junk_address(address):
         return None
-    # Common pattern: Street, City, State Zip, Country
-    # Or: City, State Zip
-    parts = [p.strip() for p in address.split(",")]
-    if len(parts) >= 2:
-        # Often the part before the state is the city
-        # Example: "6444 Park Blvd, Rochester, NY 27302, USA" -> Rochester
-        for i, part in enumerate(parts):
-            if re.search(r'\b[A-Z]{2}\b\s+\d{5}', part) or re.search(r'\b[A-Z]{2}\b$', part):
-                if i > 0:
-                    return parts[i-1]
     
-    # Fallback: if only 2 parts, first might be city
-    if len(parts) == 2:
-        return parts[0]
-        
+    parts = [p.strip() for p in address.split(",")]
+    # Try to find a part that looks like a city name (not generic country labels)
+    for part in parts:
+        if is_junk_city(part): continue
+        # City usually doesn't have numbers
+        if any(c.isdigit() for c in part): continue
+        if len(part) > 2 and len(part) < 30:
+            return part
+            
     return None
 
 def extract_domain(url: str) -> Optional[str]:
@@ -81,9 +111,9 @@ def enrich_single_business(biz_id: int):
         
         # 2. Deep Scrape from Website
         if biz.website:
-            scraped = smart_extract(biz.website, company_name=biz.company_name)
+            scraped = smart_extract(biz.website, company_name=biz.company_name, country=biz.country or "US")
             
-            # Map fields safely
+            # Map fields safely with validation
             fields_to_map = {
                 "email": "email",
                 "phone": "phone",
@@ -92,12 +122,18 @@ def enrich_single_business(biz_id: int):
                 "industry": "industry",
                 "description": "description",
                 "employee_count": "employee_count",
+                "revenue": "revenue",
                 "address": "address"
             }
             
             for scraped_key, biz_attr in fields_to_map.items():
                 val = scraped.get(scraped_key)
                 if val and not getattr(biz, biz_attr):
+                    # Validation
+                    if biz_attr == "address" and is_junk_address(val): continue
+                    if biz_attr == "city" and is_junk_city(val): continue
+                    if biz_attr == "ceo_name" and len(val) < 3: continue
+                    
                     setattr(biz, biz_attr, val)
                     updated = True
                     
@@ -119,68 +155,52 @@ def enrich_single_business(biz_id: int):
 
         # 4. Mandatory Field Completion & Fallbacks
         
-        # City Extraction
+        # Address/City Validation & Junk Reset
+        if biz.address and is_junk_address(biz.address):
+            logger.info(f"Clearing junk address for ID {biz.id}")
+            biz.address = None
+            updated = True
+            
+        if biz.city and is_junk_city(biz.city):
+            logger.info(f"Clearing junk city for ID {biz.id}")
+            biz.city = None
+            updated = True
+
         if biz.address and not biz.city:
-            biz.city = extract_city(biz.address)
+            biz.city = extract_city(biz.address, biz.company_name)
             if biz.city: updated = True
             
-        # Email Fallback (Domain pattern)
-        if biz.website and not biz.email:
-            domain = extract_domain(biz.website)
-            if domain:
-                biz.email = f"info@{domain}"
-                updated = True
-                
-        # Industry/Description fallback from Google Snippet
-        if not biz.industry or not biz.description:
-            try:
-                from ddgs import DDGS
-                with DDGS() as ddgs:
-                    q = f'"{biz.company_name}" {biz.state or ""} {biz.country or ""} business overview'
-                    for r in ddgs.text(q, max_results=2):
-                        body = r.get("body", "")
-                        if not biz.industry and len(body) > 10:
-                            # Expanded industries list
-                            industries = [
-                                "Technology", "Software", "Consulting", "Financial Services", "Insurance",
-                                "Healthcare", "Pharmaceuticals", "Biotechnology", "Real Estate", "Construction",
-                                "Retail", "E-commerce", "Manufacturing", "Telecommunications", "Energy",
-                                "Education", "Legal Services", "Media & Entertainment", "Hospitality",
-                                "Transportation", "Logistics", "Marketing & Advertising", "Engineering"
-                            ]
-                            for ind in industries:
-                                if ind.lower() in body.lower():
-                                    biz.industry = ind
-                                    updated = True
-                                    break
-                        if not biz.description and len(body) > 30:
-                            biz.description = body[:350].strip()
-                            updated = True
-            except Exception: pass
-
-        # Final check for missing fields with defaults (to satisfy "NO FIELD SHOULD REMAIN EMPTY")
-        if not biz.industry:
-            biz.industry = "General Business"
-            updated = True
-        if not biz.description:
-            biz.description = f"{biz.company_name} is a business located in {biz.city or biz.state or biz.country} specializing in its local market."
-            updated = True
-        if not biz.phone:
-            biz.phone = "Contact via Website" # Better than empty
-            updated = True
-        if not biz.email:
-            if biz.website:
-                biz.email = f"contact@{extract_domain(biz.website)}"
-            else:
-                biz.email = "contact@example.com" # Placeholder logic if truly nothing
-            updated = True
-        if not biz.city:
-            biz.city = biz.state or "Unknown City"
-            updated = True
+        # 5. Deep AI Research as Last Resort for incomplete records
+        if not biz.industry or not biz.revenue or not biz.employee_count or not biz.address:
+            logger.info(f"Using Deep AI Research for {biz.company_name}...")
+            ai_data = _ai_research(biz.company_name, state=biz.state or "", country=biz.country or "US")
+            
+            mapping = {
+                "industry": "industry",
+                "revenue": "revenue",
+                "employee_count": "employee_count",
+                "address": "address",
+                "city": "city",
+                "ceo_name": "ceo_name",
+                "website": "website",
+                "phone": "phone",
+                "email": "email",
+                "registration_date": "registration_date"
+            }
+            
+            for ai_key, biz_attr in mapping.items():
+                val = ai_data.get(ai_key)
+                if val and not getattr(biz, biz_attr):
+                    # For address/city, still validate
+                    if biz_attr == "address" and is_junk_address(val): continue
+                    if biz_attr == "city" and is_junk_city(val): continue
+                    
+                    setattr(biz, biz_attr, val)
+                    updated = True
 
         if updated:
             db.commit()
-            logger.info(f"Updated: {biz.company_name}")
+            logger.info(f"Enriched: {biz.company_name} (ID: {biz.id})")
             return True
         return False
         
@@ -202,6 +222,8 @@ def run_batch(limit=50, workers=5):
                 Business.linkedin_url == None, Business.linkedin_url == "",
                 Business.city == None, Business.city == "",
                 Business.industry == None, Business.industry == "",
+                Business.employee_count == None, Business.employee_count == "",
+                Business.revenue == None, Business.revenue == "",
                 Business.description == None, Business.description == ""
             )
         )

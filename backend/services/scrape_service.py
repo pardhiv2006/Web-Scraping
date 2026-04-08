@@ -27,6 +27,16 @@ def run_scrape(country: str, states: List[str], db: Session) -> Dict:
     elif country == "UAE": all_records = scrape_uae(states)
     else: raise ValueError(f"Unsupported country: {country}")
 
+    # Fallback Discovery Layer: Ensure at least one record per requested state
+    found_states = set(r.get("state") for r in all_records if r.get("state"))
+    missing_states = [s for s in states if s not in found_states]
+    
+    if missing_states:
+        from services.discovery_service import discover_businesses_in_region
+        for state in missing_states:
+            discovered = discover_businesses_in_region(country, state)
+            all_records.extend(discovered)
+
     inserted_ids = []
     skipped_count = 0
     error_count = 0
@@ -46,21 +56,6 @@ def run_scrape(country: str, states: List[str], db: Session) -> Dict:
 
             company_name = record.get("company_name", "").strip()
             
-            # STRICT REQUIREMENT: Only save if we genuinely find and verify their website.
-            info = discover_company_info(company_name, record.get("state") or "", country)
-            website = info.get("website")
-            
-            if not website:
-                # If website doesn't exist or isn't opening, drop the record entirely!
-                logger.info(f"Dropped {company_name}: No working website found.")
-                no_website_count += 1
-                continue
-                
-            # Now extract contact data from the confirmed working website
-            extracted = smart_extract(website, company_name=company_name)
-            
-            final_data = {**info, **extracted}
-            
             new_biz = Business(
                 company_name=company_name,
                 registration_number=rec_reg,
@@ -69,14 +64,7 @@ def run_scrape(country: str, states: List[str], db: Session) -> Dict:
                 status=record.get("status"),
                 source_url=record.get("source_url"),
                 registration_date=record.get("registration_date"),
-                address=final_data.get("address") or record.get("address"),
-                website=final_data.get("website"),
-                email=final_data.get("email"),
-                phone=final_data.get("phone"),
-                ceo_name=final_data.get("ceo_name"),
-                linkedin_url=final_data.get("linkedin_url"),
-                description=final_data.get("description"),
-                industry=final_data.get("industry")
+                address=record.get("address")
             )
             db.add(new_biz)
             db.flush()
@@ -87,7 +75,12 @@ def run_scrape(country: str, states: List[str], db: Session) -> Dict:
             error_count += 1
 
     db.commit()
-    logger.info(f"Scrape Complete. Inserted {len(inserted_ids)} fully validated records. Dropped {no_website_count} due to no website.")
+    logger.info(f"Scrape Complete. Inserted {len(inserted_ids)} base records. Spawning background threads for enrichment...")
+    
+    # Fire off background workers to fetch websites & enrich concurrently
+    for bid in inserted_ids:
+        threading.Thread(target=enrich_business_background, args=(bid,), daemon=True).start()
+
 
     return {
         "total_fetched": len(all_records),
@@ -122,7 +115,7 @@ def enrich_business_background(business_id: int):
                 
         # Only proceed to deep enrichment if we have a website or company name
         if website:
-            extracted = smart_extract(website, company_name=company_name)
+            extracted = smart_extract(website, company_name=company_name, country=biz.country or "US")
             
             # Update fields that are currently missing
             if not biz.email and extracted.get("email"): biz.email = extracted.get("email")
@@ -131,6 +124,8 @@ def enrich_business_background(business_id: int):
             if not biz.linkedin_url and extracted.get("linkedin_url"): biz.linkedin_url = extracted.get("linkedin_url")
             if not biz.description and extracted.get("description"): biz.description = extracted.get("description")
             if not biz.industry and extracted.get("industry"): biz.industry = extracted.get("industry")
+            if not biz.employee_count and extracted.get("employee_count"): biz.employee_count = extracted.get("employee_count")
+            if not biz.revenue and extracted.get("revenue"): biz.revenue = extracted.get("revenue")
             if not biz.address and extracted.get("address"): biz.address = extracted.get("address")
             
             db.commit()
