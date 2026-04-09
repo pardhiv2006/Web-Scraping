@@ -136,16 +136,25 @@ def _fetch_page(url: str) -> str:
         from selenium import webdriver
         from selenium.webdriver.chrome.service import Service
         from selenium.webdriver.chrome.options import Options
-        from webdriver_manager.chrome import ChromeDriverManager
+        
+        chrome_bin = os.getenv("CHROME_BIN", "")
+        driver_path = os.getenv("CHROMEDRIVER_PATH", "")
 
         options = Options()
+        if chrome_bin:
+            options.binary_location = chrome_bin
         options.add_argument("--headless")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
-        driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()), options=options
-        )
+        
+        if driver_path:
+            service = Service(driver_path)
+        else:
+            from webdriver_manager.chrome import ChromeDriverManager
+            service = Service(ChromeDriverManager().install())
+            
+        driver = webdriver.Chrome(service=service, options=options)
         driver.set_page_load_timeout(15)
         driver.get(url)
         html = driver.page_source

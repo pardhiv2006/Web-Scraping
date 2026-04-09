@@ -8,6 +8,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxslt-dev \
     libffi-dev \
     curl \
+    chromium \
+    chromium-driver \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpangocairo-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user for security
@@ -34,6 +47,11 @@ USER appuser
 
 # ── Runtime configuration ─────────────────────────────────────────────────────
 WORKDIR /app/backend
+
+# Selenium/Chromium environment variables
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMEDRIVER_PATH=/usr/bin/chromium-driver
+ENV PYTHONUNBUFFERED=1
 
 # Expose the port FastAPI listens on
 EXPOSE 8000
