@@ -1,0 +1,30 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+.env
+
+# Database
+*.db
+*.sqlite3
+# Only if you DON'T want the database in Git. 
+# If you want others to see your 1700 records, comment out the line above.
+
+# Logs
+*.log
+backend/*.log
+
+# Exports
+*.csv
+*.json
+!package.json
+!package-lock.json
+!render.yaml
+
+# OS-specific
+.DS_Store
+Thumbs.db

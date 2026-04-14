@@ -44,9 +44,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     let selectedCountry = null;
     let selectedStates = new Map();
     let currentPage = 1;
+    let activeHistoryId = null;         // currently displayed history item id
+    let isViewingHistory = false;       // whether table is showing cached history data
+    let historyResults = [];            // complete dataset for current history item
+    let historyMeta = { total: 0, pages: 1, limit: 50 };
+    let currentScrapeHistoryId = null;  // history ID for the active scrape session
 
     let currentLimit = 50;
     const API_BASE = '/api';
+
+    // --- Modal Logic ---
+    const confirmModal = document.getElementById('confirm-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalMessage = document.getElementById('modal-message');
+    const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+    const modalCancelBtn = document.getElementById('modal-cancel-btn');
+    const modalCloseX = document.getElementById('modal-close-x');
+
+    /**
+     * Shows a custom confirmation modal and returns a promise
+     */
+    function showConfirmModal(title, message) {
+        return new Promise((resolve) => {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            confirmModal.classList.remove('hidden');
+
+            const cleanup = (result) => {
+                confirmModal.classList.add('hidden');
+                modalConfirmBtn.onclick = null;
+                modalCancelBtn.onclick = null;
+                modalCloseX.onclick = null;
+                resolve(result);
+            };
+
+            modalConfirmBtn.onclick = () => cleanup(true);
+            modalCancelBtn.onclick = () => cleanup(false);
+            modalCloseX.onclick = () => cleanup(false);
+        });
+    }
 
     // --- Initialization ---
     init();
@@ -65,7 +101,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // --- API Calls & Data Loading ---
+    // ─────────────────────────── API Calls & Data Loading ───────────────────────────
+
     async function loadCountries() {
         try {
             const res = await fetch(`${API_BASE}/countries`, { headers: Auth.getAuthHeader() });
@@ -104,6 +141,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         selectedCountry = null;
                         div.classList.remove('selected');
                         resetStates();
+                        clearHistoryMode();
                         loadBusinesses(1);
                     }
                 });
@@ -122,6 +160,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         countrySelectTrigger.classList.remove('active');
         resetStates();
         loadStates(country.code);
+        clearHistoryMode();
         
         const tableContainer = document.querySelector('.data-table-container');
         const statsBar = document.querySelector('.stats-bar');
@@ -129,8 +168,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         statsBar.classList.add('hidden');
         exportCsvBtn.classList.add('hidden');
         statTotal.textContent = '0';
-        
-        // Don't call loadBusinesses here yet, wait for states
     }
 
     async function loadStates(countryCode) {
@@ -203,12 +240,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function loadBusinesses(page = 1) {
-        console.log(`[DEBUG] loadBusinesses called: page=${page}, country=${selectedCountry}, statesSize=${selectedStates.size}`);
+        if (isViewingHistory) {
+            console.warn("[SCRAPE] loadBusinesses blocked: currently in history mode.");
+            return;
+        }
+
         const tableContainer = document.querySelector('.data-table-container');
         const statsBar = document.querySelector('.stats-bar');
 
         if (!selectedCountry || selectedStates.size === 0) {
-            console.warn("[DEBUG] loadBusinesses exiting early: Missing country or states");
             if (tableContainer) tableContainer.classList.add('hidden');
             if (statsBar) statsBar.classList.add('hidden');
             exportCsvBtn.classList.add('hidden');
@@ -224,6 +264,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             params.append('page', page);
             params.append('limit', currentLimit);
             params.append('country', selectedCountry.toUpperCase());
+            params.append('strict', 'false'); // Always fetch all records, not just fully enriched ones
             Array.from(selectedStates.keys()).forEach(state => {
                 params.append('state', state.toUpperCase());
             });
@@ -265,6 +306,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             noData.classList.remove('hidden');
             return;
         }
+        noData.classList.add('hidden');
         
         businesses.forEach(b => {
             const tr = document.createElement('tr');
@@ -297,6 +339,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // ─────────────────────────── History ───────────────────────────
+
     async function loadHistory() {
         try {
             const res = await fetch(`${API_BASE}/history`, { headers: Auth.getAuthHeader() });
@@ -309,44 +353,209 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            history.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'history-item';
-                const date = new Date(item.searched_at).toLocaleDateString();
-                div.innerHTML = `
-                    <div class="history-item-header">
-                        <span class="history-country">${item.country}</span>
-                        <span class="history-date">${date}</span>
-                    </div>
-                    <div class="history-details">${item.result_count} results found</div>
-                `;
-                div.addEventListener('click', () => {
-                   // Quick re-run logic could go here
-                });
-                historyList.appendChild(div);
-            });
+            history.forEach(item => renderHistoryItem(item));
         } catch (err) {
             console.error('Failed to load history', err);
         }
     }
 
-    async function saveSearch(summary) {
+    function renderHistoryItem(item) {
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        div.id = `history-item-${item.id}`;
+        if (item.id === activeHistoryId) div.classList.add('active');
+
+        const date = new Date(item.searched_at);
+        const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        const statesLabel = item.states && item.states.length > 0
+            ? (item.states.length === 1 ? item.states[0] : `${item.states.length} regions`)
+            : 'All';
+
+        div.innerHTML = `
+            <div class="history-item-header">
+                <span class="history-country">${item.country}</span>
+                <div class="history-item-actions">
+                    <button class="history-item-delete" title="Delete this entry" data-id="${item.id}">🗑️</button>
+                </div>
+            </div>
+            <div class="history-details">${statesLabel} · ${item.result_count} results</div>
+            <div class="history-item-footer">
+                <span class="history-date">${dateStr} ${timeStr}</span>
+            </div>
+        `;
+
+        // Click on item body (not delete button) → load cached data
+        div.addEventListener('click', (e) => {
+            if (e.target.closest('.history-item-delete')) return;
+            loadHistoryItem(item.id, div);
+        });
+
+        // Per-item delete
+        div.querySelector('.history-item-delete').addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await deleteHistoryItem(item.id, div);
+        });
+
+        historyList.appendChild(div);
+    }
+
+    async function loadHistoryItem(historyId, divEl) {
+        // Strict: terminate any active live scrape before loading history
+        stopActiveScrape();
+
+        // Visual feedback - sidebar
+        divEl.classList.add('history-item-loading');
+        
+        // Immediate UI preparation (Instant Feedback)
+        isViewingHistory = true;
+        activeHistoryId = historyId;
+        
+        const tableContainer = document.querySelector('.data-table-container');
+        const statsBar = document.querySelector('.stats-bar');
+        
+        if (tableContainer) {
+            tableContainer.classList.remove('hidden');
+            tableLoading.classList.remove('hidden');
+            noData.classList.add('hidden');
+            businessList.innerHTML = ''; // Clear previous results instantly
+            tableContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        if (statsBar) {
+            statsBar.classList.remove('hidden');
+            statTotal.textContent = '...';
+            statRecent.textContent = '-';
+            statSkipped.textContent = '-';
+        }
+
         try {
-            console.log(`[DEBUG] saving search: total_fetched=${summary.total_fetched}`);
-            await fetch(`${API_BASE}/history`, {
-                method: 'POST',
-                headers: { ...Auth.getAuthHeader(), 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    country: selectedCountry,
-                    states: Array.from(selectedStates.keys()),
-                    result_count: summary.total_fetched
-                })
+            const res = await fetch(`${API_BASE}/history/${historyId}`, {
+                headers: Auth.getAuthHeader()
             });
-            loadHistory();
+
+            if (!res.ok) {
+                showToast('Could not retrieve history data.', 'error');
+                tableLoading.classList.add('hidden');
+                return;
+            }
+
+            const item = await res.json();
+
+            if (item.data_error) {
+                showToast('Data corrupted for this search entry.', 'error');
+                tableLoading.classList.add('hidden');
+                return;
+            }
+
+            // Mark sidebar item as active
+            document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
+            divEl.classList.add('active');
+
+            // Store in local history state for navigation
+            historyResults = item.result_data || [];
+            
+            historyMeta = {
+                total: item.pagination_meta?.total || historyResults.length,
+                limit: 50,
+                pages: item.pagination_meta?.pages || Math.ceil(historyResults.length / 50) || 1
+            };
+            currentPage = 1; 
+
+            // Render first page from snapshot
+            const initialPage = historyResults.slice(0, historyMeta.limit);
+            renderTable(initialPage);
+            
+            statTotal.textContent = historyMeta.total;
+
+            if (tableContainer) {
+                const tableHeaderTitle = tableContainer.querySelector('.table-header h2');
+                if (tableHeaderTitle) {
+                    const d = new Date(item.searched_at);
+                    tableHeaderTitle.innerHTML = `Historical Data <span class="table-source-tag">from ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>`;
+                }
+            }
+
+            // Pagination Display
+            pageInfo.textContent = `Page ${currentPage} of ${historyMeta.pages}`;
+            prevPageBtn.disabled = true;
+            nextPageBtn.disabled = historyMeta.pages <= 1;
+
+            showToast(`Loaded ${historyMeta.total} records from ${new Date(item.searched_at).toLocaleDateString()}`);
         } catch (err) {
-            console.error('❌ [DEBUG] Failed to save history', err);
+            console.error('Failed to load history item', err);
+            showToast('Failed to load cached results.', 'error');
+        } finally {
+            divEl.classList.remove('history-item-loading');
+            tableLoading.classList.add('hidden');
         }
     }
+
+    function clearHistoryMode() {
+        // Reset table header, pagination, and history state back to "live" mode
+        isViewingHistory = false;
+        activeHistoryId = null;
+        document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
+        const tableHeaderTitle = document.querySelector('.data-table-container .table-header h2');
+        if (tableHeaderTitle) {
+            tableHeaderTitle.innerHTML = 'Extracted Data';
+            tableHeaderTitle.classList.remove('historical-view');
+        }
+    }
+
+    function stopActiveScrape() {
+        if (scrapeInterval) {
+            console.log("[SCRAPE] Stopping active enrichment polling...");
+            clearInterval(scrapeInterval);
+            scrapeInterval = null;
+        }
+        currentScrapeHistoryId = null;
+        startScrapeBtn.disabled = false;
+        startScrapeBtn.querySelector('.btn-text').textContent = 'Start Scrape';
+        checkScrapeButton();
+    }
+
+    async function deleteHistoryItem(historyId, divEl) {
+        const confirmed = await showConfirmModal(
+            'Confirm Deletion',
+            'Are you sure you want to permanently delete this search history entry? This action cannot be undone.'
+        );
+        if (!confirmed) return;
+        try {
+            const res = await fetch(`${API_BASE}/history/${historyId}`, {
+                method: 'DELETE',
+                headers: Auth.getAuthHeader()
+            });
+            if (!res.ok) {
+                showToast('Failed to delete history item.', 'error');
+                return;
+            }
+            // Animate out then remove
+            divEl.style.transition = 'opacity 0.25s, transform 0.25s';
+            divEl.style.opacity = '0';
+            divEl.style.transform = 'translateX(-20px)';
+            setTimeout(() => {
+                divEl.remove();
+                if (historyList.children.length === 0) {
+                    historyList.innerHTML = '<div class="empty-history">No history yet</div>';
+                }
+            }, 260);
+
+            // If we were viewing this item's data, clear the view
+            if (activeHistoryId === historyId) {
+                clearHistoryMode();
+                const tableContainer = document.querySelector('.data-table-container');
+                if (tableContainer) tableContainer.classList.add('hidden');
+                document.querySelector('.stats-bar')?.classList.add('hidden');
+            }
+        } catch (err) {
+            console.error('Failed to delete history item', err);
+            showToast('Failed to delete history item.', 'error');
+        }
+    }
+
+    // Removed saveSearch: History snapshots are now handled directly by the backend for 100% integrity.
+
+    // ─────────────────────────── UI Helpers ───────────────────────────
 
     function updateStateLabel() {
         if (selectedStates.size === 0) {
@@ -364,6 +573,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function showToast(message, type = 'success') {
         const container = document.getElementById('toast-container');
+        if (!container) {
+            console.warn("⚠️ Toast container missing. Message:", message);
+            return;
+        }
         const toast = document.createElement('div');
         toast.className = 'toast';
         if (type === 'error') toast.style.borderColor = 'var(--danger)';
@@ -380,68 +593,127 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function handleStartScrape() {
         if (!selectedCountry || selectedStates.size === 0) return;
-        
-        if (scrapeInterval) clearInterval(scrapeInterval);
-        
+
+        // ── Reset UI ─────────────────────────────────────────────────────────
+        stopActiveScrape();
+        clearHistoryMode();
+        currentPage = 1;
+        historyResults = [];
+        businessList.innerHTML = '';
+        statRecent.textContent  = '0';
+        statSkipped.textContent = '0';
+        statTotal.textContent   = '0';
+
         startScrapeBtn.disabled = true;
         startScrapeBtn.querySelector('.btn-text').textContent = 'Extracting...';
-        
-        // Make table and spinner visible immediately
+
         const tableContainer = document.querySelector('.data-table-container');
         const statsBar = document.querySelector('.stats-bar');
-        
+
         if (tableContainer) {
             tableContainer.classList.remove('hidden');
             tableContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
         if (statsBar) {
             statsBar.classList.remove('hidden');
+            statRecent.textContent  = '...';
+            statSkipped.textContent = '...';
         }
-        
+
         tableLoading.classList.remove('hidden');
         noData.classList.add('hidden');
-        
+        if (exportCsvBtn) exportCsvBtn.classList.add('hidden');
+
+        const startTime = Date.now();
+
         try {
             const res = await fetch(`${API_BASE}/scrape`, {
                 method: 'POST',
                 headers: { ...Auth.getAuthHeader(), 'Content-Type': 'application/json' },
-                body: JSON.stringify({ country: selectedCountry, states: Array.from(selectedStates.keys()) })
+                body: JSON.stringify({
+                    country: selectedCountry,
+                    states: Array.from(selectedStates.keys())
+                })
             });
 
             const data = await res.json();
+            console.log("📊 [Scrape Response]:", data);
+            const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
             if (res.ok && data.success) {
                 const s = data.summary;
-                showToast(`STARTED: ${s.total_fetched} records found. Enriching fields...`);
-                statRecent.textContent = s.inserted;
-                statSkipped.textContent = parseInt(statSkipped.textContent || '0') + s.skipped_dupes;
-                saveSearch(s);
-                
-                // Initial Load (Basic Data)
-                await loadBusinesses(1);
+                const records = s.records || [];
 
-                // POLL FOR ENRICHMENT (Real-time updates)
-                let pollCount = 0;
-                scrapeInterval = setInterval(async () => {
-                    pollCount++;
-                    console.log(`[POLL] Refreshing enriched data (Attempt ${pollCount})...`);
-                    await loadBusinesses(currentPage);
-                    if (pollCount >= 20) { // Stop after 1 minute (20 * 3s)
-                        clearInterval(scrapeInterval);
-                        scrapeInterval = null;
-                        console.log("[POLL] Mass enrichment polling completed.");
-                    }
-                }, 3000);
+                // ── Update stats ──────────────────────────────────────────────
+                statRecent.textContent  = s.inserted  ?? 0;
+                statSkipped.textContent = s.skipped_dupes ?? 0;
+                statTotal.textContent   = records.length;
+
+                // ── Store result set for pagination ──────────────────────────
+                isViewingHistory = true;          // use local pagination, not server
+                activeHistoryId  = s.history_id;
+                historyResults   = records;
+                historyMeta = {
+                    total : records.length,
+                    limit : 50,
+                    pages : Math.max(1, Math.ceil(records.length / 50))
+                };
+
+                // ── INSTANT TABLE RENDER (page 1) ─────────────────────────────
+                renderTable(records.slice(0, 50));
+                renderPagination();
+
+                // ── Export button ─────────────────────────────────────────────
+                if (records.length > 0 && exportCsvBtn) {
+                    exportCsvBtn.classList.remove('hidden');
+                }
+
+                // ── Table header tag ──────────────────────────────────────────
+                const tableHeaderTitle = tableContainer && tableContainer.querySelector('.table-header h2');
+                if (tableHeaderTitle) {
+                    const now = new Date();
+                    tableHeaderTitle.innerHTML =
+                        `Extracted Data <span class="table-source-tag">Live · ${now.toLocaleTimeString()}</span>`;
+                }
+
+                // ── Refresh sidebar (non-blocking) ────────────────────────────
+                loadHistory();
+
+                if (records.length === 0) {
+                    showToast('Scrape completed — no quality records found for selected region.', 'error');
+                } else {
+                    showToast(`✓ ${records.length} records loaded in ${duration}s.`, 'success');
+                }
 
             } else {
-                showToast(data.detail || 'Scraping failed', 'error');
+                // API returned an error structure
+                showToast(data.detail || 'Scraping failed — please try again.', 'error');
+                noData.classList.remove('hidden');
             }
+
         } catch (error) {
-            showToast('Network error during extraction', 'error');
+            console.error('[Scrape] Network error:', error);
+            showToast('Network error during extraction — is the server running?', 'error');
+            noData.classList.remove('hidden');
         } finally {
+            // Always restore button and hide spinner
             startScrapeBtn.querySelector('.btn-text').textContent = 'Start Scrape';
-            checkScrapeButton();
+            tableLoading.classList.add('hidden');
+            checkScrapeButton(); // re-enables button based on selections
         }
     }
+
+    function renderPagination() {
+        if (isViewingHistory) {
+            pageInfo.textContent = `Page ${currentPage} of ${historyMeta.pages}`;
+            prevPageBtn.disabled = currentPage <= 1;
+            nextPageBtn.disabled = currentPage >= historyMeta.pages;
+        } else {
+            // Live pagination is handled inside loadBusinesses
+        }
+    }
+
+    // ─────────────────────────── Event Listeners ───────────────────────────
 
     function setupEventListeners() {
         logoutBtn.addEventListener('click', () => Auth.logout());
@@ -477,6 +749,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         startScrapeBtn.addEventListener('click', handleStartScrape);
+
         exportCsvBtn.addEventListener('click', async () => {
             if (!selectedCountry) return;
             const params = new URLSearchParams();
@@ -508,9 +781,38 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-        refreshBtn.addEventListener('click', () => loadBusinesses(1));
-        prevPageBtn.addEventListener('click', () => currentPage > 1 && loadBusinesses(currentPage - 1));
-        nextPageBtn.addEventListener('click', () => loadBusinesses(currentPage + 1));
+        refreshBtn.addEventListener('click', () => {
+            clearHistoryMode();
+            loadBusinesses(1);
+        });
+
+        prevPageBtn.addEventListener('click', () => {
+            if (isViewingHistory) {
+                if (currentPage > 1) {
+                    currentPage--;
+                    const start = (currentPage - 1) * historyMeta.limit;
+                    const end = start + historyMeta.limit;
+                    renderTable(historyResults.slice(start, end));
+                    renderPagination();
+                }
+            } else {
+                if (currentPage > 1) loadBusinesses(currentPage - 1);
+            }
+        });
+
+        nextPageBtn.addEventListener('click', () => {
+            if (isViewingHistory) {
+                if (currentPage < historyMeta.pages) {
+                    currentPage++;
+                    const start = (currentPage - 1) * historyMeta.limit;
+                    const end = start + historyMeta.limit;
+                    renderTable(historyResults.slice(start, end));
+                    renderPagination();
+                }
+            } else {
+                loadBusinesses(currentPage + 1);
+            }
+        });
 
         searchInput.addEventListener('input', (e) => {
             const term = e.target.value.toLowerCase();
@@ -519,10 +821,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
+        // Clear ALL history — permanently deletes from DB
         clearHistoryBtn.addEventListener('click', async () => {
-            // Simplified clear for now (just visual or delete all in background)
-            historyList.innerHTML = '<div class="empty-history">History cleared</div>';
+            const confirmed = await showConfirmModal(
+                'Clear All History',
+                'Are you sure you want to permanently delete ALL search history? This cannot be undone.'
+            );
+            if (!confirmed) return;
+            try {
+                const res = await fetch(`${API_BASE}/history`, {
+                    method: 'DELETE',
+                    headers: Auth.getAuthHeader()
+                });
+                if (res.ok) {
+                    historyList.innerHTML = '<div class="empty-history">No history yet</div>';
+                    clearHistoryMode();
+                    showToast('Search history cleared.');
+                } else {
+                    showToast('Failed to clear history.', 'error');
+                }
+            } catch (err) {
+                console.error('Failed to clear history', err);
+                showToast('Failed to clear history.', 'error');
+            }
         });
     }
 });
-

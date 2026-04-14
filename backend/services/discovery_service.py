@@ -64,7 +64,7 @@ def _extract_company_names_from_snippets(snippets: list, region_name: str, count
     return list(candidates)[:10]
 
 
-def discover_businesses_in_region(country_code: str, state_code: str, max_results: int = 5) -> List[Dict]:
+def discover_businesses_in_region(country_code: str, state_code: str, max_results: int = 15) -> List[Dict]:
     """
     Discover real businesses in a given country/region via web search.
     Returns minimal dicts compatible with scrape_service.run_scrape.

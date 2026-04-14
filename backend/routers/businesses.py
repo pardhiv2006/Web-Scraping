@@ -18,7 +18,8 @@ def get_businesses(
     country: Optional[str] = Query(None),
     state: Optional[List[str]] = Query(None),
     page: int = Query(1, ge=1),
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(50, ge=1, le=2000),  # Allow up to 2000 for history snapshots
+    strict: bool = Query(True),
     db: Session = Depends(get_db),
 ):
     """
@@ -29,38 +30,17 @@ def get_businesses(
 
     country_upper = country.strip().upper() if country else None
     states_upper = [s.strip().upper() for s in state] if state else None
-    logger.info(f"GET /businesses → country={country_upper}, state={states_upper}, page={page}")
+    logger.info(f"GET /businesses → country={country_upper}, state={states_upper}, page={page}, strict={strict}")
 
     if country_upper:
         query = query.filter(Business.country == country_upper)
     if states_upper:
         query = query.filter(Business.state.in_(states_upper))
 
-    # Apply strict 100% completeness filter
-    required_string_fields = [
-        Business.registration_date, Business.address, Business.status, 
-        Business.email, Business.phone, Business.website, 
-        Business.ceo_name, Business.ceo_email, Business.founder_name, 
-        Business.linkedin_url, Business.industry, Business.description
-    ]
-    
-    placeholders = ['', '-', 'n/a', 'N/A', 'none', 'None', 'null', 'NULL', 'tbd']
-    
-    for field in required_string_fields:
-        query = query.filter(field.isnot(None), field.notin_(placeholders))
-        
-    # Exclude ranges or fake numbers for exact fields
-    query = query.filter(
-        Business.employee_count.isnot(None),
-        Business.employee_count.notin_(placeholders),
-        ~Business.employee_count.like('%-%')
-    )
-    
-    query = query.filter(
-        Business.revenue.isnot(None),
-        Business.revenue.notin_(placeholders),
-        ~Business.revenue.like('%-%')
-    )
+    if strict:
+        # We now assume the database is kept clean via strict_cleanup.py 
+        # and other ingestion-time checks. Removing runtime slow filters.
+        pass
 
     total = query.count()
     records = (

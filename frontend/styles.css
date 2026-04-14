@@ -255,6 +255,7 @@ header::after {
     padding: 12px;
     cursor: pointer;
     transition: all 0.2s;
+    position: relative;
 }
 
 .history-item:hover {
@@ -263,11 +264,71 @@ header::after {
     transform: translateX(4px);
 }
 
+/* Active = currently displayed cached entry */
+.history-item.active {
+    border-color: var(--primary);
+    background: var(--primary-light);
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.18);
+}
+
+.history-item.active .history-country {
+    color: var(--primary);
+}
+
+/* Subtle pulse while fetching cached data */
+@keyframes historyPulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+}
+.history-item.history-item-loading {
+    animation: historyPulse 1s ease-in-out infinite;
+    pointer-events: none;
+}
+
 .history-item-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     margin-bottom: 4px;
+}
+
+.history-item-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+}
+
+.history-item-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+/* Per-item delete (🗑️) button */
+.history-item-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    padding: 4px 6px;
+    border-radius: 6px;
+    opacity: 0;
+    transition: all 0.2s ease;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.history-item:hover .history-item-delete {
+    opacity: 1;
+}
+
+.history-item-delete:hover {
+    background: var(--danger-bg);
+    color: var(--danger);
 }
 
 .history-country {
@@ -277,7 +338,7 @@ header::after {
 }
 
 .history-date {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     color: var(--text-muted);
 }
 
@@ -287,6 +348,29 @@ header::after {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* Cached / No Data badge on each history item */
+.history-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 99px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.history-badge.cached {
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+
+.history-badge.no-data {
+    background: #fef9c3;
+    color: #92400e;
+    border: 1px solid #fde68a;
 }
 
 #clear-history-btn {
@@ -497,6 +581,22 @@ select:focus,
     font-size: 1.1rem;
     font-weight: 600;
     color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Tag shown next to table header when displaying cached history data */
+.table-source-tag {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--primary);
+    background: var(--primary-light);
+    border: 1px solid rgba(79, 70, 229, 0.2);
+    border-radius: 99px;
+    padding: 3px 10px;
+    letter-spacing: 0.02em;
+    font-family: 'Plus Jakarta Sans', sans-serif;
 }
 
 .table-actions {
@@ -899,4 +999,103 @@ tbody tr:hover td {
     .stat-value { font-size: 1.8rem; }
     #toast-container { right: 1rem; bottom: 1rem; left: 1rem; }
     .toast { width: 100%; }
+}
+
+/* ===== CUSTOM MODAL ===== */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.modal-overlay:not(.hidden) {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-card {
+    width: 100%;
+    max-width: 420px;
+    border-radius: var(--radius-xl);
+    padding: 0;
+    overflow: hidden;
+    transform: scale(0.9) translateY(10px);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.modal-overlay:not(.hidden) .modal-card {
+    transform: scale(1) translateY(0);
+}
+
+.modal-header {
+    padding: 1.5rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.4);
+}
+
+.modal-header h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.modal-close:hover {
+    color: var(--danger);
+}
+
+.modal-body {
+    padding: 2rem;
+}
+
+.modal-body p {
+    color: var(--text-sub);
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+
+.modal-footer {
+    padding: 1.25rem 2rem;
+    background: rgba(248, 250, 252, 0.5);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    border-top: 1px solid rgba(226, 232, 240, 0.4);
+}
+
+.btn-primary.danger {
+    background: var(--danger);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+}
+
+.btn-primary.danger:hover {
+    background: #b91c1c;
+    box-shadow: 0 6px 16px rgba(220, 38, 38, 0.3);
+}
+
+.modal-overlay.hidden {
+    display: none;
 }

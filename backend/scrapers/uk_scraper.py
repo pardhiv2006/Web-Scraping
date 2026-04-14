@@ -42,15 +42,15 @@ def _parse_ch_item(item: dict, region: str) -> Dict:
         "source_url": f"https://find-and-update.company-information.service.gov.uk/company/{company_number}" if company_number else "",
     }
 
-def _fetch_advanced_search(region: str, per_page: int = 25) -> List[Dict]:
+def _fetch_advanced_search(region: str, per_page: int = 50) -> List[Dict]:
     if not CH_API_KEY: return []
     try:
-        resp = requests.get(f"{CH_BASE}/advanced-search/companies", params={"incorporated_from": "2025-01-01", "size": per_page, "start_index": 0}, headers=_build_headers(), timeout=15)
+        resp = requests.get(f"{CH_BASE}/advanced-search/companies", params={"size": per_page, "start_index": 0}, headers=_build_headers(), timeout=15)
         if resp.status_code != 200: return []
         return [_parse_ch_item(item, region) for item in resp.json().get("items", []) if item.get("company_name") or item.get("title")]
     except Exception: return []
 
-def _fetch_public_search(region: str, keyword: str, per_page: int = 20) -> List[Dict]:
+def _fetch_public_search(region: str, keyword: str, per_page: int = 50) -> List[Dict]:
     try:
         resp = requests.get(f"{CH_BASE}/search/companies", params={"q": keyword, "items_per_page": per_page}, headers=_build_headers(), timeout=15)
         if resp.status_code != 200: return []

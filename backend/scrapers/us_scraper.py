@@ -16,12 +16,12 @@ HEADERS = {
     "Accept": "application/json",
 }
 
-def _fetch_from_opencorporates(state: str, per_page: int = 30) -> List[Dict]:
+def _fetch_from_opencorporates(state: str, per_page: int = 50) -> List[Dict]:
     jurisdiction = f"us_{state.lower()}"
     records: List[Dict] = []
 
     param_sets = [
-        {"jurisdiction_code": jurisdiction, "incorporation_date": "2025-01-01:", "order": "incorporation_date", "per_page": per_page},
+        {"jurisdiction_code": jurisdiction, "order": "incorporation_date", "per_page": per_page},
         {"jurisdiction_code": jurisdiction, "per_page": per_page},
     ]
 
