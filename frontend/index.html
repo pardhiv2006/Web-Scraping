@@ -3,195 +3,206 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Registry Scraper | Dashboard</title>
-    <link rel="stylesheet" href="styles.css?v=1.1.0">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
-    <script src="auth.js?v=1.0.1"></script>
+    <title>BizScraper Console</title>
+    <link rel="stylesheet" href="styles.css?v=3.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="auth.js?v=3.0"></script>
     <script>
-        // Immediate redirect if not logged in to prevent flash
-        if (!localStorage.getItem('token')) {
-            window.location.href = '/login.html';
-        }
+        if (!localStorage.getItem('token')) { window.location.href = '/login.html'; }
     </script>
 </head>
 <body>
-    <main class="container">
-        <header>
-            <nav class="top-nav">
-                <div class="nav-left"></div>
-                
-                <div class="nav-center">
-                    <div class="logo-container">
-                        <div class="logo">
-                            <span class="icon">🔍</span>
-                            <h1>BizScraper <span>AI</span></h1>
-                        </div>
-                        <p class="subtitle">Next-generation corporate intelligence & automated data extraction</p>
+    <div class="app-container">
+        
+        <!-- Radical Navigation Paradigm: Integrated Left Console -->
+        <aside class="sidebar" id="history-sidebar">
+            <div class="brand-header">
+                <div class="logo-lockup">
+                    <i data-lucide="layers"></i>
+                    <h1>BizScraper</h1>
+                </div>
+            </div>
+
+            <div class="sidebar-top">
+                <span class="sidebar-label">Query History</span>
+                <button id="clear-history-btn" class="btn-icon-danger" title="Clear History">
+                    <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                </button>
+            </div>
+            
+            <div id="history-list" class="history-list">
+                <!-- Skeletons -->
+                <div class="history-item-skeleton shimmer"></div>
+                <div class="history-item-skeleton shimmer"></div>
+                <div class="history-item-skeleton shimmer"></div>
+            </div>
+
+            <div class="user-profile" id="user-menu">
+                <div class="user-meta">
+                    <div class="user-avatar" id="nav-username-initial">
+                        <i data-lucide="user" style="width:16px;height:16px;color:#a1a1aa;"></i>
                     </div>
+                    <span id="nav-username">Admin</span>
+                    <span class="user-role">N/A</span>
                 </div>
+                <button id="logout-btn" class="btn-logout" title="Log Out">
+                    <i data-lucide="log-out" style="width: 16px; height: 16px;"></i>
+                </button>
+            </div>
+        </aside>
 
-                <div class="nav-right" id="user-menu">
-                    <div class="user-info">
-                        <span id="nav-username">User</span>
-                        <div class="user-avatar">👤</div>
-                    </div>
-                    <button id="logout-btn" class="btn-secondary">Logout</button>
-                </div>
-            </nav>
-        </header>
+        <!-- Main Operative Screen -->
+        <main class="main-content">
+            
+            <div class="top-command-bar">
+                <div class="command-title">Active Index Interface</div>
+            </div>
 
-        <div class="main-layout">
-            <aside class="sidebar glass" id="history-sidebar">
-                <div class="sidebar-header">
-                    <h3>Search History</h3>
-                    <button id="clear-history-btn" title="Clear History">🗑️</button>
-                </div>
-                <div id="history-list" class="history-list">
-                    <!-- Populated by JS -->
-                    <div class="empty-history">No history yet</div>
-                </div>
-            </aside>
-
-            <div class="content">
-
-
-        <section class="controls glass">
-            <div class="control-grid">
-                <div class="control-group">
-                    <label for="country-select">Country</label>
-                    <div class="multi-select-container" id="country-container">
-                        <div id="country-select-trigger" class="select-trigger">
-                            <span id="country-select-label">Select a country</span>
-                        </div>
-                        <div id="country-options" class="options-dropdown hidden">
-                            <!-- Populated by JS -->
-                        </div>
-                    </div>
-                </div>
-
-
-                <div class="control-group">
-                    <label for="state-select">Regions / States</label>
-                    <div class="multi-select-container">
-                        <div id="state-select-trigger" class="select-trigger">
-                            <span id="state-select-label">Select regions</span>
-                        </div>
-
-                        <div id="state-options" class="options-dropdown hidden">
-                            <!-- Populated by JS -->
+            <!-- Precision Controls Block -->
+            <section class="controls-card">
+                <div class="card-grid">
+                    <div class="control-group">
+                        <label>Country</label>
+                        <div class="multi-select-container" id="country-container">
+                            <div id="country-select-trigger" class="select-trigger">
+                                <span id="country-select-label">Select</span>
+                                <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
+                            </div>
+                            <div id="country-options" class="options-dropdown hidden"></div>
                         </div>
                     </div>
-                    <div id="state-warning" class="validation-warning hidden">Please select a country first</div>
-                </div>
 
+                    <div class="control-group">
+                        <label>States</label>
+                        <div class="multi-select-container" id="state-container">
+                            <div id="state-select-trigger" class="select-trigger">
+                                <span id="state-select-label">Select</span>
+                                <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
+                            </div>
+                            <div id="state-options" class="options-dropdown hidden"></div>
+                        </div>
+                        <div id="state-warning" class="validation-warning hidden">Country required</div>
+                    </div>
 
-                <div class="actions">
-                    <label class="alignment-label">&nbsp;</label>
                     <button id="start-scrape-btn" class="btn-primary" disabled>
                         <span class="btn-text">Start Scrape</span>
                         <div class="spinner hidden"></div>
                     </button>
                 </div>
-            </div>
-        </section>
+            </section>
 
-        <section class="stats-bar hidden">
-            <div class="stat-card glass">
-                <span class="stat-label">Total Records</span>
-                <span id="stat-total" class="stat-value">0</span>
-            </div>
-            <div class="stat-card glass">
-                <span class="stat-label">Recent Scrape</span>
-                <span id="stat-recent" class="stat-value">0</span>
-            </div>
-            <div class="stat-card glass">
-                <span class="stat-label">Duplicates Skipped</span>
-                <span id="stat-skipped" class="stat-value">0</span>
-            </div>
-        </section>
-
-        <section class="data-table-container glass hidden">
-
-            <div class="table-header">
-                <h2>Extracted Data</h2>
-                <div class="table-actions">
-                    <input type="text" id="table-search" placeholder="Search businesses...">
-                    <button id="refresh-btn" title="Refresh Table">🔄</button>
+            <!-- Metrics -->
+            <div class="stats-row hidden">
+                <div class="stat-card">
+                    <div class="stat-icon"><i data-lucide="hash"></i></div>
+                    <div class="stat-label">Total Index Count</div>
+                    <div id="stat-total" class="stat-value">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i data-lucide="layers"></i></div>
+                    <div class="stat-label">Yield This Operations</div>
+                    <div id="stat-recent" class="stat-value">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i data-lucide="alert-circle"></i></div>
+                    <div class="stat-label">Skipped Anomalies</div>
+                    <div id="stat-skipped" class="stat-value">0</div>
                 </div>
             </div>
-            <div class="table-wrapper">
-                <table id="business-table">
-                    <thead>
-                        <tr>
-                            <th>Company Name</th>
-                            <th>Reg Number</th>
-                            <th>Reg Date</th>
-                            <th>Status</th>
-                            <th>Address</th>
-                            <th>Country</th>
-                            <th>State</th>
-                            <th>Email</th>
-                            <th>Phone</th>
-                            <th>Website</th>
-                            <th>CEO / Founder</th>
-                            <th>CEO Email</th>
-                            <th>Industry</th>
-                            <th>Employee Size</th>
-                            <th>Revenue</th>
-                            <th>LinkedIn</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="business-list">
-                        <!-- Populated by JS -->
-                    </tbody>
-                </table>
-                <div id="no-data" class="empty-state hidden">
-                    <p>No records found. Start a scrape to collect data.</p>
-                </div>
-                <div id="table-loading" class="table-overlay hidden">
-                    <div class="spinner large"></div>
-                </div>
-            </div>
-            <div class="table-footer">
-                <div class="pagination">
-                    <button id="prev-page" disabled>Previous</button>
-                    <div class="pagination-center">
-                        <span id="page-info">Page 1 of 1</span>
+
+            <!-- Data Array -->
+            <section class="data-results-container hidden">
+                
+                <div class="results-header">
+                    <div class="results-title"><h2>Nodes</h2></div>
+                    <div class="results-actions">
+                        <div class="search-input-wrapper">
+                            <i data-lucide="search" style="width: 14px; height: 14px;"></i>
+                            <input type="text" id="table-search" placeholder="Search parameters...">
+                        </div>
+                        <button id="refresh-btn" class="btn-refresh" title="Reload View">
+                            <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
+                        </button>
                     </div>
-                    <button id="next-page" disabled>Next</button>
                 </div>
-                <div class="footer-actions">
-                    <button id="export-csv-btn" class="btn-primary hidden">
-                        <span>Export Scraped Data (CSV)</span>
+
+                <!-- The magic happens here: JS will inject rows here, but our CSS enforces them as masonry cards -->
+                <div class="data-view-wrapper">
+                    <!-- Standard card-table header is removed via CSS to break the table illusion -->
+                    <div class="card-table-header">
+                        <div class="col-name">Name</div>
+                        <div class="col-reg">Reg</div>
+                        <div class="col-status">Status</div>
+                        <div class="col-location">Loc</div>
+                        <div class="col-contact">Contact</div>
+                        <div class="col-actions"></div>
+                    </div>
+                    
+                    <div id="business-list" class="card-row-container">
+                        <div class="card-row-skeleton shimmer"></div>
+                        <div class="card-row-skeleton shimmer"></div>
+                        <div class="card-row-skeleton shimmer"></div>
+                        <div class="card-row-skeleton shimmer"></div>
+                    </div>
+
+                    <div id="no-data" class="empty-state hidden">
+                        <p>No entity data registered on standard output stream.</p>
+                    </div>
+                    
+                    <div id="table-loading" class="table-overlay hidden">
+                        <div class="spinner large"></div>
+                    </div>
+                </div>
+
+                <div class="results-footer">
+                    <div class="pagination">
+                        <button id="prev-page" disabled><i data-lucide="arrow-left" style="width:14px; height:14px;"></i> Prev</button>
+                        <button id="next-page" disabled>Next <i data-lucide="arrow-right" style="width:14px; height:14px;"></i></button>
+                    </div>
+                    <div id="page-info" style="display:none;"></div> <!-- Keep ID to avoid JS errors, but hide it to fit minimalist aesthetic -->
+                    <button id="export-csv-btn" class="btn-export hidden">
+                        <i data-lucide="download" style="width:14px; height:14px;"></i>
+                        <span>Export</span>
                     </button>
                 </div>
-            </div>
-        </section>
-            </div> <!-- End content -->
-        </div> <!-- End main-layout -->
-    </main>
 
-    <!-- Custom Confirmation Modal -->
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
     <div id="confirm-modal" class="modal-overlay hidden">
-        <div class="modal-card glass">
+        <div class="modal-card">
             <div class="modal-header">
                 <h3 id="modal-title">Confirm Action</h3>
-                <button class="modal-close" id="modal-close-x">✕</button>
+                <button class="modal-close" id="modal-close-x"><i data-lucide="x" style="width: 16px; height: 16px;"></i></button>
             </div>
             <div class="modal-body">
-                <p id="modal-message">Are you sure you want to proceed?</p>
+                <p id="modal-message">Please confirm to proceed</p>
             </div>
             <div class="modal-footer">
                 <button id="modal-cancel-btn" class="btn-secondary">Cancel</button>
-                <button id="modal-confirm-btn" class="btn-primary danger">Delete</button>
+                <button id="modal-confirm-btn" class="btn-primary danger">Confirm</button>
             </div>
         </div>
     </div>
 
     <div id="toast-container"></div>
-    <script src="app.js?v=1.1.0"></script>
+    
+    <script src="app.js?v=3.0"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            
+            // Set first letter in avatar if username is available
+            setTimeout(() => {
+                const uname = document.getElementById('nav-username').textContent;
+                if(uname && uname !== 'Admin') {
+                    document.getElementById('nav-username-initial').innerHTML = `<span style="font-size:12px; font-weight:600; color:var(--text-primary); text-transform:uppercase;">${uname.charAt(0)}</span>`;
+                }
+            }, 500);
+        });
+    </script>
 </body>
 </html>

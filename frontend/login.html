@@ -3,101 +3,190 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BizScraper AI | Login</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+    <title>BizScraper System Auth</title>
+    <link rel="stylesheet" href="styles.css?v=3.2">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         body {
             display: flex;
             align-items: center;
             justify-content: center;
-            background-image: url('bg.png');
-            background-size: cover;
-        }
-        .auth-card {
-            width: 100%;
-            max-width: 450px;
-            padding: 2.5rem;
-            margin: 20px;
-            animation: fadeUp 0.6s ease;
-        }
-        .auth-header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        .auth-tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 2rem;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 10px;
-        }
-        .auth-tab {
-            flex: 1;
-            padding: 10px;
-            text-align: center;
-            cursor: pointer;
-            font-weight: 600;
-            color: var(--text-muted);
-            transition: color 0.2s;
-        }
-        .auth-tab.active {
-            color: var(--primary);
+            min-height: 100vh;
+            margin: 0;
+            background-color: var(--bg-base-solid);
+            background-image: var(--bg-base);
             position: relative;
         }
-        .auth-tab.active::after {
-            content: '';
+
+        /* Ambient glowing orbs */
+        .ambient-orb {
             position: absolute;
-            bottom: -11px;
-            left: 0;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.15;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .orb-1 { width: 500px; height: 500px; background: var(--accent); top: 10%; right: 20%; }
+        .orb-2 { width: 600px; height: 600px; background: #a855f7; bottom: -10%; left: 10%; }
+
+        /* Login Card matching main dashboard card style */
+        .auth-container {
             width: 100%;
-            height: 2px;
-            background: var(--primary);
+            max-width: 440px;
+            background: var(--bg-surface);
+            padding: 48px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-dim);
+            box-shadow: var(--shadow-lg), inset 0 1px 1px rgba(255,255,255,0.05);
+            transition: all var(--transition);
+            position: relative;
+            z-index: 10;
+            backdrop-filter: blur(20px);
+            animation: floatUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
+
+        .auth-container:hover {
+            box-shadow: 0 20px 40px rgba(0,0,0,0.8), 0 0 40px rgba(99, 102, 241, 0.1);
+            border-color: var(--border-strong);
+            transform: translateY(-4px);
+        }
+
+        @keyframes floatUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Brand Header */
+        .auth-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .logo-lockup {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .logo-lockup i {
+            color: var(--accent-hover);
+            filter: drop-shadow(0 0 8px var(--accent-glow));
+            width: 32px;
+            height: 32px;
+        }
+
+        .logo-lockup h1 {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .auth-header .subtitle {
+            font-size: 14px;
+            color: var(--text-tertiary);
+        }
+
+        /* Tabs matching sidebar format */
+        .auth-tabs {
+            display: flex;
+            margin-bottom: 32px;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-sm);
+            padding: 4px;
+            border: 1px solid var(--border-dim);
+        }
+
+        .auth-tab {
+            flex: 1;
+            text-align: center;
+            padding: 10px 0;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: all var(--transition);
+        }
+
+        .auth-tab:hover { color: var(--text-primary); }
+
+        .auth-tab.active {
+            color: var(--text-primary);
+            background: var(--bg-elevated);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-strong);
+        }
+
+        /* Form matching command center */
         .form-group {
-            margin-bottom: 1.5rem;
+            margin-bottom: 20px;
         }
+
         .form-group label {
             display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
             margin-bottom: 8px;
-            font-size: 0.85rem;
             font-weight: 600;
-            color: var(--text-sub);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
+
         .form-group input {
             width: 100%;
             height: 48px;
-            padding: 0 1rem;
-            border: 1px solid var(--border);
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border-strong);
             border-radius: var(--radius-md);
+            padding: 0 16px;
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
             outline: none;
-            font-family: inherit;
+            transition: all var(--transition);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
         }
+
         .form-group input:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow), inset 0 2px 4px rgba(0,0,0,0.2);
+            background: rgba(0,0,0,0.5);
         }
-        .auth-btn {
+
+        /* Submit Button */
+        .btn-primary.auth-btn {
             width: 100%;
-            margin-top: 1rem;
+            margin-top: 32px;
+            height: 52px;
+            font-size: 15px;
+            justify-content: center;
         }
+
     </style>
 </head>
 <body>
-    <div class="auth-card glass radius-xl">
+    <div class="ambient-orb orb-1"></div>
+    <div class="ambient-orb orb-2"></div>
+    
+    <div class="auth-container">
         <div class="auth-header">
-            <div class="logo">
-                <span class="icon">🔍</span>
-                <h1>BizScraper <span>AI</span></h1>
+            <div class="logo-lockup">
+                <i data-lucide="layers"></i>
+                <h1>BizScraper</h1>
             </div>
-            <p class="subtitle">Secure workspace for data intelligence</p>
+            <p class="subtitle">Secure authentication node</p>
         </div>
 
         <div class="auth-tabs">
-            <div id="tab-login" class="auth-tab active">Login</div>
-            <div id="tab-register" class="auth-tab">Register</div>
+            <div id="tab-login" class="auth-tab active">Log In</div>
+            <div id="tab-register" class="auth-tab">Create Account</div>
         </div>
 
         <form id="auth-form">
@@ -122,7 +211,7 @@
             </div>
 
             <button type="submit" id="submit-btn" class="btn-primary auth-btn">
-                <span class="btn-text">Sign In</span>
+                <span class="btn-text">Authenticate</span>
                 <div class="spinner hidden" id="auth-spinner"></div>
             </button>
         </form>
@@ -154,7 +243,7 @@
             confirmPasswordGroup.classList.add('hidden');
             emailInput.removeAttribute('required');
             confirmPasswordInput.removeAttribute('required');
-            submitBtnText.textContent = 'Sign In';
+            submitBtnText.textContent = 'Authenticate';
         });
 
         tabRegister.addEventListener('click', () => {
@@ -165,7 +254,7 @@
             confirmPasswordGroup.classList.remove('hidden');
             emailInput.setAttribute('required', '');
             confirmPasswordInput.setAttribute('required', '');
-            submitBtnText.textContent = 'Create Account';
+            submitBtnText.textContent = 'Create Portal';
         });
 
         authForm.addEventListener('submit', async (e) => {
@@ -191,7 +280,7 @@
                 } else {
                     const success = await Auth.register(username, email, password);
                     if (success) {
-                        showToast('Registration successful! Please login.');
+                        showToast('Portal created successfully');
                         tabLogin.click();
                     }
                 }
@@ -207,17 +296,19 @@
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = 'toast';
-            if (type === 'error') toast.style.borderColor = 'var(--danger)';
+            if (type === 'error') {
+                toast.style.borderLeftColor = 'var(--danger)';
+            }
             toast.textContent = message;
             container.appendChild(toast);
             setTimeout(() => {
                 toast.style.opacity = '0';
-                toast.style.transform = 'translateX(50px)';
-                setTimeout(() => toast.remove(), 500);
+                toast.style.transform = 'translateY(10px) translateX(20px)';
+                setTimeout(() => toast.remove(), 400);
             }, 3000);
         }
 
-        // Check if already logged in
+        lucide.createIcons();
         if (Auth.isLoggedIn()) {
             window.location.href = '/';
         }

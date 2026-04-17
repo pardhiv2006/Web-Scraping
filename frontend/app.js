@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const countrySelectLabel = document.getElementById('country-select-label');
     const countryOptions = document.getElementById('country-options');
 
-    const stateSelectContainer = document.querySelector('.multi-select-container:not(#country-container)');
+    const stateSelectContainer = document.getElementById('state-container');
     const stateSelectTrigger = document.getElementById('state-select-trigger');
     const stateSelectLabel = document.getElementById('state-select-label');
     const stateOptions = document.getElementById('state-options');
@@ -162,8 +162,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadStates(country.code);
         clearHistoryMode();
         
-        const tableContainer = document.querySelector('.data-table-container');
-        const statsBar = document.querySelector('.stats-bar');
+        const tableContainer = document.querySelector('.data-results-container');
+        const statsBar = document.querySelector('.stats-row');
         tableContainer.classList.add('hidden');
         statsBar.classList.add('hidden');
         exportCsvBtn.classList.add('hidden');
@@ -245,8 +245,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        const tableContainer = document.querySelector('.data-table-container');
-        const statsBar = document.querySelector('.stats-bar');
+        const tableContainer = document.querySelector('.data-results-container');
+        const statsBar = document.querySelector('.stats-row');
 
         if (!selectedCountry || selectedStates.size === 0) {
             if (tableContainer) tableContainer.classList.add('hidden');
@@ -309,33 +309,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         noData.classList.add('hidden');
         
         businesses.forEach(b => {
-            const tr = document.createElement('tr');
+            const row = document.createElement('div');
+            row.className = 'card-row lift-on-hover';
             let statusClass = (b.status || '').toLowerCase().includes('active') ? 'status-active' : 'status-pending';
             
-            tr.innerHTML = `
-                <td><strong>${b.company_name}</strong></td>
-                <td><span style="font-family: monospace; opacity: 0.7;">${b.registration_number}</span></td>
-                <td><span style="font-size: 0.85rem;">${b.registration_date || '-'}</span></td>
-                <td><span class="status-badge ${statusClass}">${b.status || 'Active'}</span></td>
-                <td><span style="font-size: 0.85rem; display: block; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${b.address || ''}">${b.address || '-'}</span></td>
-                <td>${b.country || '-'}</td>
-                <td>${b.state || '-'}</td>
-                <td>${b.email || '<span class="text-muted">-</span>'}</td>
-                <td>${b.phone || '<span class="text-muted">-</span>'}</td>
-                <td>${(b.website && typeof b.website === 'string') ? `<a href="${b.website.startsWith('http') ? b.website : 'https://' + b.website}" target="_blank" class="link-primary" style="font-size: 0.8rem; word-break: break-all;">${b.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]} ⇗</a>` : '<span class="text-muted">-</span>'}</td>
-                <td>${b.ceo_name ? `<div style="font-size: 0.85rem;">${b.ceo_name}</div>` : '<span class="text-muted">-</span>'}</td>
-                <td>${b.ceo_email ? `<a href="mailto:${b.ceo_email}" class="link-primary" style="font-size: 0.8rem;">${b.ceo_email}</a>` : '<span class="text-muted">-</span>'}</td>
-                <td><span style="font-size: 0.8rem; color: var(--text-dim);">${b.industry || '-'}</span></td>
-                <td><span style="font-size: 0.8rem;">${b.employee_count || b.employee_size || '-'}</span></td>
-                <td><span style="font-size: 0.8rem; font-weight: 600; color: #10b981;">${b.revenue || '-'}</span></td>
-                <td>${(b.linkedin_url && typeof b.linkedin_url === 'string')
-                    ? `<a href="${b.linkedin_url.startsWith('http') ? b.linkedin_url : 'https://' + b.linkedin_url}" target="_blank" class="link-primary" style="font-size: 0.8rem;">LinkedIn ⇗</a>`
-                    : '<span class="text-muted">-</span>'}</td>
-                <td>
-                    ${b.source_url ? `<a href="${b.source_url}" target="_blank" class="btn-secondary" style="font-size: 10px; padding: 4px 8px;">Source ⇗</a>` : '-'}
-                </td>
+            row.innerHTML = `
+                <div class="col-name">
+                    <div style="font-weight: 700;">${b.company_name}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">${b.industry || 'General Business'}</div>
+                </div>
+                <div class="col-reg">
+                    <span>${b.registration_number || '-'}</span>
+                </div>
+                <div class="col-status">
+                    <span class="status-badge ${statusClass}">${b.status || 'Active'}</span>
+                </div>
+                <div class="col-location">
+                    <div style="font-size: 0.85rem;">${b.state || '-'}, ${b.country || '-'}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;" title="${b.address || ''}">${b.address || ''}</div>
+                </div>
+                <div class="col-contact">
+                    <div style="display: flex; flex-direction: column; gap: 2px;">
+                        ${b.email ? `<span style="font-size: 0.8rem;"><i data-lucide="mail" style="width: 12px; height: 12px; display: inline; vertical-align: middle;"></i> ${b.email}</span>` : ''}
+                        ${b.phone ? `<span style="font-size: 0.8rem;"><i data-lucide="phone" style="width: 12px; height: 12px; display: inline; vertical-align: middle;"></i> ${b.phone}</span>` : ''}
+                        ${b.website ? `<a href="${b.website.startsWith('http') ? b.website : 'https://' + b.website}" target="_blank" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;">${b.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]} <i data-lucide="external-link" style="width: 10px; height: 10px; display: inline;"></i></a>` : ''}
+                    </div>
+                </div>
+                <div class="col-actions">
+                    ${b.source_url ? `<a href="${b.source_url}" target="_blank" class="btn-row-action" title="View Source">View</a>` : '-'}
+                </div>
             `;
-            businessList.appendChild(tr);
+            businessList.appendChild(row);
+        });
+        
+        lucide.createIcons({
+            root: businessList
         });
     }
 
@@ -361,7 +369,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderHistoryItem(item) {
         const div = document.createElement('div');
-        div.className = 'history-item';
+        div.className = 'history-item lift-on-hover';
         div.id = `history-item-${item.id}`;
         if (item.id === activeHistoryId) div.classList.add('active');
 
@@ -374,27 +382,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         div.innerHTML = `
             <div class="history-item-header">
-                <span class="history-country">${item.country}</span>
-                <div class="history-item-actions">
-                    <button class="history-item-delete" title="Delete this entry" data-id="${item.id}">🗑️</button>
-                </div>
+                <span class="history-country"><i data-lucide="globe" style="width: 12px; height: 12px; display: inline; margin-right: 4px;"></i>${item.country}</span>
+                <span class="history-date">${dateStr}</span>
             </div>
             <div class="history-details">${statesLabel} · ${item.result_count} results</div>
-            <div class="history-item-footer">
-                <span class="history-date">${dateStr} ${timeStr}</span>
-            </div>
         `;
 
-        // Click on item body (not delete button) → load cached data
-        div.addEventListener('click', (e) => {
-            if (e.target.closest('.history-item-delete')) return;
-            loadHistoryItem(item.id, div);
-        });
+        div.addEventListener('click', () => loadHistoryItem(item.id, div));
 
-        // Per-item delete
-        div.querySelector('.history-item-delete').addEventListener('click', async (e) => {
-            e.stopPropagation();
-            await deleteHistoryItem(item.id, div);
+        lucide.createIcons({
+            root: div
         });
 
         historyList.appendChild(div);
@@ -411,21 +408,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         isViewingHistory = true;
         activeHistoryId = historyId;
         
-        const tableContainer = document.querySelector('.data-table-container');
-        const statsBar = document.querySelector('.stats-bar');
+        const tableContainer = document.querySelector('.data-results-container');
+        const statsBar = document.querySelector('.stats-row');
         
         if (tableContainer) {
             tableContainer.classList.remove('hidden');
-            tableLoading.classList.remove('hidden');
+            businessList.innerHTML = `
+                <div class="card-row-skeleton shimmer"></div>
+                <div class="card-row-skeleton shimmer"></div>
+                <div class="card-row-skeleton shimmer"></div>
+                <div class="card-row-skeleton shimmer"></div>
+            `;
             noData.classList.add('hidden');
-            businessList.innerHTML = ''; // Clear previous results instantly
             tableContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
         if (statsBar) {
             statsBar.classList.remove('hidden');
             statTotal.textContent = '...';
-            statRecent.textContent = '-';
-            statSkipped.textContent = '-';
+            statRecent.textContent = '...';
+            statSkipped.textContent = '...';
         }
 
         try {
@@ -468,7 +469,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             statTotal.textContent = historyMeta.total;
 
             if (tableContainer) {
-                const tableHeaderTitle = tableContainer.querySelector('.table-header h2');
+                const tableHeaderTitle = tableContainer.querySelector('.results-title h2');
                 if (tableHeaderTitle) {
                     const d = new Date(item.searched_at);
                     tableHeaderTitle.innerHTML = `Historical Data <span class="table-source-tag">from ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>`;
@@ -495,7 +496,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         isViewingHistory = false;
         activeHistoryId = null;
         document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
-        const tableHeaderTitle = document.querySelector('.data-table-container .table-header h2');
+        const tableHeaderTitle = document.querySelector('.data-results-container .results-title h2');
         if (tableHeaderTitle) {
             tableHeaderTitle.innerHTML = 'Extracted Data';
             tableHeaderTitle.classList.remove('historical-view');
@@ -543,9 +544,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             // If we were viewing this item's data, clear the view
             if (activeHistoryId === historyId) {
                 clearHistoryMode();
-                const tableContainer = document.querySelector('.data-table-container');
+                const tableContainer = document.querySelector('.data-results-container');
                 if (tableContainer) tableContainer.classList.add('hidden');
-                document.querySelector('.stats-bar')?.classList.add('hidden');
+                document.querySelector('.stats-row')?.classList.add('hidden');
             }
         } catch (err) {
             console.error('Failed to delete history item', err);
@@ -597,18 +598,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         // ── Reset UI ─────────────────────────────────────────────────────────
         stopActiveScrape();
         clearHistoryMode();
+        countryOptions.classList.add('hidden');
+        stateOptions.classList.add('hidden');
+        countrySelectTrigger.classList.remove('active');
+        stateSelectTrigger.classList.remove('active');
         currentPage = 1;
         historyResults = [];
-        businessList.innerHTML = '';
-        statRecent.textContent  = '0';
-        statSkipped.textContent = '0';
-        statTotal.textContent   = '0';
+        businessList.innerHTML = `
+            <div class="card-row-skeleton shimmer"></div>
+            <div class="card-row-skeleton shimmer"></div>
+            <div class="card-row-skeleton shimmer"></div>
+            <div class="card-row-skeleton shimmer"></div>
+        `;
+        statRecent.textContent  = '...';
+        statSkipped.textContent = '...';
+        statTotal.textContent   = '...';
 
         startScrapeBtn.disabled = true;
         startScrapeBtn.querySelector('.btn-text').textContent = 'Extracting...';
 
-        const tableContainer = document.querySelector('.data-table-container');
-        const statsBar = document.querySelector('.stats-bar');
+        const tableContainer = document.querySelector('.data-results-container');
+        const statsBar = document.querySelector('.stats-row');
 
         if (tableContainer) {
             tableContainer.classList.remove('hidden');
@@ -616,11 +626,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (statsBar) {
             statsBar.classList.remove('hidden');
-            statRecent.textContent  = '...';
-            statSkipped.textContent = '...';
         }
 
-        tableLoading.classList.remove('hidden');
         noData.classList.add('hidden');
         if (exportCsvBtn) exportCsvBtn.classList.add('hidden');
 
@@ -669,7 +676,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 // ── Table header tag ──────────────────────────────────────────
-                const tableHeaderTitle = tableContainer && tableContainer.querySelector('.table-header h2');
+                const tableHeaderTitle = tableContainer && tableContainer.querySelector('.results-title h2');
                 if (tableHeaderTitle) {
                     const now = new Date();
                     tableHeaderTitle.innerHTML =
@@ -816,7 +823,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         searchInput.addEventListener('input', (e) => {
             const term = e.target.value.toLowerCase();
-            document.querySelectorAll('#business-list tr').forEach(row => {
+            document.querySelectorAll('.card-row').forEach(row => {
                 row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
             });
         });
