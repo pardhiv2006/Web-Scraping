@@ -59,55 +59,58 @@
                 <div class="command-title">Active Index Interface</div>
             </div>
 
-            <!-- Precision Controls Block -->
-            <section class="controls-card">
-                <div class="card-grid">
-                    <div class="control-group">
-                        <label>Country</label>
-                        <div class="multi-select-container" id="country-container">
-                            <div id="country-select-trigger" class="select-trigger">
-                                <span id="country-select-label">Select</span>
-                                <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
+            <!-- Wrapper for sticky behavior during scraping -->
+            <div class="sticky-header-wrapper">
+                <!-- Precision Controls Block -->
+                <section class="controls-card">
+                    <div class="card-grid">
+                        <div class="control-group">
+                            <label>Country</label>
+                            <div class="multi-select-container" id="country-container">
+                                <div id="country-select-trigger" class="select-trigger">
+                                    <span id="country-select-label">Select</span>
+                                    <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
+                                </div>
+                                <div id="country-options" class="options-dropdown hidden"></div>
                             </div>
-                            <div id="country-options" class="options-dropdown hidden"></div>
                         </div>
-                    </div>
 
-                    <div class="control-group">
-                        <label>States</label>
-                        <div class="multi-select-container" id="state-container">
-                            <div id="state-select-trigger" class="select-trigger">
-                                <span id="state-select-label">Select</span>
-                                <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
+                        <div class="control-group">
+                            <label>States</label>
+                            <div class="multi-select-container" id="state-container">
+                                <div id="state-select-trigger" class="select-trigger">
+                                    <span id="state-select-label">Select</span>
+                                    <i data-lucide="chevron-down" style="width:14px; height:14px;"></i>
+                                </div>
+                                <div id="state-options" class="options-dropdown hidden"></div>
                             </div>
-                            <div id="state-options" class="options-dropdown hidden"></div>
+                            <div id="state-warning" class="validation-warning hidden">Country required</div>
                         </div>
-                        <div id="state-warning" class="validation-warning hidden">Country required</div>
+
+                        <button id="start-scrape-btn" class="btn-primary" disabled>
+                            <span class="btn-text">Start Scrape</span>
+                            <div class="spinner hidden"></div>
+                        </button>
                     </div>
+                </section>
 
-                    <button id="start-scrape-btn" class="btn-primary" disabled>
-                        <span class="btn-text">Start Scrape</span>
-                        <div class="spinner hidden"></div>
-                    </button>
-                </div>
-            </section>
-
-            <!-- Metrics -->
-            <div class="stats-row hidden">
-                <div class="stat-card">
-                    <div class="stat-icon"><i data-lucide="hash"></i></div>
-                    <div class="stat-label">Total Index Count</div>
-                    <div id="stat-total" class="stat-value">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon"><i data-lucide="layers"></i></div>
-                    <div class="stat-label">Yield This Operations</div>
-                    <div id="stat-recent" class="stat-value">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon"><i data-lucide="alert-circle"></i></div>
-                    <div class="stat-label">Skipped Anomalies</div>
-                    <div id="stat-skipped" class="stat-value">0</div>
+                <!-- Metrics -->
+                <div class="stats-row hidden">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i data-lucide="hash"></i></div>
+                        <div class="stat-label">Total Index Count</div>
+                        <div id="stat-total" class="stat-value">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i data-lucide="layers"></i></div>
+                        <div class="stat-label">Yield This Operations</div>
+                        <div id="stat-recent" class="stat-value">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i data-lucide="alert-circle"></i></div>
+                        <div class="stat-label">Skipped Anomalies</div>
+                        <div id="stat-skipped" class="stat-value">0</div>
+                    </div>
                 </div>
             </div>
 
@@ -118,8 +121,8 @@
                     <div class="results-title"><h2>Nodes</h2></div>
                     <div class="results-actions">
                         <div class="search-input-wrapper">
-                            <i data-lucide="search" style="width: 14px; height: 14px;"></i>
                             <input type="text" id="table-search" placeholder="Search parameters...">
+                            <i data-lucide="search" style="width: 14px; height: 14px;"></i>
                         </div>
                         <button id="refresh-btn" class="btn-refresh" title="Reload View">
                             <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i>
@@ -147,6 +150,7 @@
                     </div>
 
                     <div id="no-data" class="empty-state hidden">
+                        <i data-lucide="database-zap" style="width: 48px; height: 48px; margin-bottom: 20px; opacity: 0.5;"></i>
                         <p>No entity data registered on standard output stream.</p>
                     </div>
                     

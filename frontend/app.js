@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let historyMeta = { total: 0, pages: 1, limit: 50 };
     let currentScrapeHistoryId = null;  // history ID for the active scrape session
 
-    let currentLimit = 50;
+    let currentLimit = 48; // Updated to multiple of 3 to ensure perfectly filled rows
     const API_BASE = '/api';
 
     // --- Modal Logic ---
@@ -84,11 +84,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    function forceScrollReset() {
+        const containers = [
+            document.querySelector('.main-content'),
+            document.querySelector('.data-view-wrapper'),
+            document.documentElement,
+            document.body
+        ];
+        
+        const resetAction = () => {
+            containers.forEach(el => {
+                if (el) {
+                    el.scrollTop = 0;
+                    el.style.scrollBehavior = 'auto'; // Force instant
+                }
+            });
+            window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+        };
+
+        // 1. Initial Pulse
+        resetAction();
+
+        // 2. Post-Render Anchor (Sync with browser paint)
+        requestAnimationFrame(() => {
+            resetAction();
+            
+            // Safety: hitting results header if possible
+            const resultsHeader = document.querySelector('.results-header');
+            if (resultsHeader) {
+                resultsHeader.scrollIntoView({ behavior: 'instant', block: 'start' });
+            }
+        });
+
+        // 3. Final Hard Reset (Safety timeout)
+        setTimeout(resetAction, 10);
+    }
+
     // --- Initialization ---
     init();
 
     async function init() {
         console.log("🚀 Initializing BizScraper AI Dashboard...");
+        
+        // Disable browser scroll restoration to prevent interference with custom logic
+        if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'manual';
+        }
+
         setupEventListeners();
         
         try {
@@ -275,7 +317,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             const data = await res.json();
             
-            renderTable(data.businesses);
+            // --- Pre-filter for integrity and sequential flow ---
+            const rawBusinesses = data.businesses || [];
+            const businesses = rawBusinesses.filter(b => b.company_name && b.company_name.trim() !== '');
+
+            renderTable(businesses);
             statTotal.textContent = data.total;
             currentPage = data.page;
             
@@ -302,6 +348,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderTable(businesses) {
         businessList.innerHTML = '';
+
         if (!businesses || businesses.length === 0) {
             noData.classList.remove('hidden');
             return;
@@ -453,18 +500,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             divEl.classList.add('active');
 
             // Store in local history state for navigation
-            historyResults = item.result_data || [];
+            const rawResults = item.result_data || [];
+            historyResults = rawResults.filter(b => b.company_name && b.company_name.trim() !== '');
             
             historyMeta = {
                 total: item.pagination_meta?.total || historyResults.length,
-                limit: 50,
-                pages: item.pagination_meta?.pages || Math.ceil(historyResults.length / 50) || 1
+                limit: currentLimit,
+                pages: Math.ceil(historyResults.length / currentLimit) || 1
             };
             currentPage = 1; 
 
             // Render first page from snapshot
             const initialPage = historyResults.slice(0, historyMeta.limit);
             renderTable(initialPage);
+            forceScrollReset(); 
             
             statTotal.textContent = historyMeta.total;
 
@@ -617,12 +666,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         startScrapeBtn.disabled = true;
         startScrapeBtn.querySelector('.btn-text').textContent = 'Extracting...';
 
+        const mainContent = document.querySelector('.main-content');
         const tableContainer = document.querySelector('.data-results-container');
         const statsBar = document.querySelector('.stats-row');
 
+        if (mainContent) {
+            mainContent.classList.add('is-scraping');
+        }
+
         if (tableContainer) {
             tableContainer.classList.remove('hidden');
-            tableContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Simplified scroll – CSS will handle the layout shift
         }
         if (statsBar) {
             statsBar.classList.remove('hidden');
@@ -649,7 +703,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (res.ok && data.success) {
                 const s = data.summary;
-                const records = s.records || [];
+                // --- Pre-filter records for integrity ---
+                const rawRecords = s.records || [];
+                const records = rawRecords.filter(b => b.company_name && b.company_name.trim() !== '');
 
                 // ── Update stats ──────────────────────────────────────────────
                 statRecent.textContent  = s.inserted  ?? 0;
@@ -662,13 +718,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 historyResults   = records;
                 historyMeta = {
                     total : records.length,
-                    limit : 50,
-                    pages : Math.max(1, Math.ceil(records.length / 50))
+                    limit : currentLimit,
+                    pages : Math.max(1, Math.ceil(records.length / currentLimit))
                 };
 
                 // ── INSTANT TABLE RENDER (page 1) ─────────────────────────────
-                renderTable(records.slice(0, 50));
+                renderTable(records.slice(0, currentLimit));
                 renderPagination();
+                forceScrollReset();
 
                 // ── Export button ─────────────────────────────────────────────
                 if (records.length > 0 && exportCsvBtn) {
@@ -801,9 +858,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const end = start + historyMeta.limit;
                     renderTable(historyResults.slice(start, end));
                     renderPagination();
+                    forceScrollReset();
                 }
             } else {
-                if (currentPage > 1) loadBusinesses(currentPage - 1);
+                if (currentPage > 1) {
+                    loadBusinesses(currentPage - 1).then(() => forceScrollReset());
+                }
             }
         });
 
@@ -815,9 +875,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const end = start + historyMeta.limit;
                     renderTable(historyResults.slice(start, end));
                     renderPagination();
+                    forceScrollReset();
                 }
             } else {
-                loadBusinesses(currentPage + 1);
+                loadBusinesses(currentPage + 1).then(() => forceScrollReset());
             }
         });
 
