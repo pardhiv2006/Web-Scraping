@@ -376,13 +376,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;" title="${b.address || ''}">${b.address || ''}</div>
                 </div>
                 <div class="col-contact">
-                    <div style="display: flex; flex-direction: column; gap: 2px;">
-                        ${b.email ? `<span style="font-size: 0.8rem;"><i data-lucide="mail" style="width: 12px; height: 12px; display: inline; vertical-align: middle;"></i> ${b.email}</span>` : ''}
-                        ${b.phone ? `<span style="font-size: 0.8rem;"><i data-lucide="phone" style="width: 12px; height: 12px; display: inline; vertical-align: middle;"></i> ${b.phone}</span>` : ''}
-                        ${b.website ? `<a href="${b.website.startsWith('http') ? b.website : 'https://' + b.website}" target="_blank" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;">${b.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]} <i data-lucide="external-link" style="width: 10px; height: 10px; display: inline;"></i></a>` : ''}
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        ${b.email ? `<span style="font-size: 0.8rem; display: flex; align-items: center; gap: 8px;"><i data-lucide="mail" style="width: 14px; height: 14px; opacity: 0.7;"></i> ${b.email}</span>` : ''}
+                        ${b.phone ? `<span style="font-size: 0.8rem; display: flex; align-items: center; gap: 8px;"><i data-lucide="phone" style="width: 14px; height: 14px; opacity: 0.7;"></i> ${b.phone}</span>` : ''}
+                        ${b.website ? `<a href="${b.website.startsWith('http') ? b.website : 'https://' + b.website}" target="_blank" style="font-size: 0.8rem; color: var(--accent); text-decoration: none; display: flex; align-items: center; gap: 8px;">${b.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]} <i data-lucide="external-link" style="width: 10px; height: 10px; opacity: 0.7;"></i></a>` : ''}
+                        ${b.linkedin_url ? `<a href="${b.linkedin_url.startsWith('http') ? b.linkedin_url : 'https://' + b.linkedin_url}" target="_blank" style="font-size: 0.8rem; color: var(--accent); text-decoration: none; display: flex; align-items: center; gap: 8px;"><i data-lucide="linkedin" style="width: 14px; height: 14px; opacity: 0.7;"></i> LinkedIn <i data-lucide="external-link" style="width: 10px; height: 10px; opacity: 0.7;"></i></a>` : ''}
                     </div>
                 </div>
-                <div class="col-actions">
+                <div class="col-actions" style="margin-top: 8px; padding-top: 0; border: none;">
                     ${b.source_url ? `<a href="${b.source_url}" target="_blank" class="btn-row-action" title="View Source">View</a>` : '-'}
                 </div>
             `;
