@@ -4,7 +4,7 @@
   "description": "Business Registry Scraper - Python FastAPI Backend",
   "scripts": {
     "dev": "lsof -ti:8000 | xargs kill -9 2>/dev/null; (sleep 2 && open http://localhost:8000) & cd backend && source venv/bin/activate && uvicorn main:app --reload --port 8000",
-    "install:backend": "cd backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt",
+    "install:backend": "cd backend && python3.10 -m venv venv && source venv/bin/activate && pip install -r requirements.txt",
     "start": "npm run dev"
 
   },

@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tableLoading = document.getElementById('table-loading');
     const refreshBtn = document.getElementById('refresh-btn');
     const searchInput = document.getElementById('table-search');
+    const mainContent = document.querySelector('.main-content');
     
     // History elements
     const historyList = document.getElementById('history-list');
@@ -50,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let historyMeta = { total: 0, pages: 1, limit: 50 };
     let currentScrapeHistoryId = null;  // history ID for the active scrape session
 
-    let currentLimit = 48; // Updated to multiple of 3 to ensure perfectly filled rows
+    let currentLimit = 35; // Set to 35 for optimal record visibility as requested
     const API_BASE = '/api';
 
     // --- Modal Logic ---
@@ -251,12 +252,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     div.addEventListener('click', (e) => {
                         const checkbox = div.querySelector('input');
                         if (e.target.tagName !== 'INPUT') checkbox.checked = !checkbox.checked;
+                        
                         if (checkbox.checked) {
                             selectedStates.set(state.code, state.name);
                             div.classList.add('selected');
                         } else {
                             selectedStates.delete(state.code);
                             div.classList.remove('selected');
+                            
                             const allCb = document.getElementById('state-all');
                             if(allCb) allCb.checked = false;
                         }
@@ -265,6 +268,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
                     stateOptions.appendChild(div);
                 });
+
+                // NO FOOTER: Closing is handled by clicking the trigger or clicking outside.
             } else {
                 stateOptions.innerHTML = '<div style="padding: 15px; color: var(--text-dim); text-align: center;">No regions available</div>';
             }
@@ -351,48 +356,122 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (!businesses || businesses.length === 0) {
             noData.classList.remove('hidden');
+            renderLeadsSummary([]);
             return;
         }
         noData.classList.add('hidden');
-        
+
         businesses.forEach(b => {
-            const row = document.createElement('div');
-            row.className = 'card-row lift-on-hover';
-            let statusClass = (b.status || '').toLowerCase().includes('active') ? 'status-active' : 'status-pending';
-            
-            row.innerHTML = `
-                <div class="col-name">
-                    <div style="font-weight: 700;">${b.company_name}</div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted);">${b.industry || 'General Business'}</div>
-                </div>
-                <div class="col-reg">
-                    <span>${b.registration_number || '-'}</span>
-                </div>
-                <div class="col-status">
-                    <span class="status-badge ${statusClass}">${b.status || 'Active'}</span>
-                </div>
-                <div class="col-location">
-                    <div style="font-size: 0.85rem;">${b.state || '-'}, ${b.country || '-'}</div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;" title="${b.address || ''}">${b.address || ''}</div>
-                </div>
-                <div class="col-contact">
-                    <div style="display: flex; flex-direction: column; gap: 4px;">
-                        ${b.email ? `<span style="font-size: 0.8rem; display: flex; align-items: center; gap: 8px;"><i data-lucide="mail" style="width: 14px; height: 14px; opacity: 0.7;"></i> ${b.email}</span>` : ''}
-                        ${b.phone ? `<span style="font-size: 0.8rem; display: flex; align-items: center; gap: 8px;"><i data-lucide="phone" style="width: 14px; height: 14px; opacity: 0.7;"></i> ${b.phone}</span>` : ''}
-                        ${b.website ? `<a href="${b.website.startsWith('http') ? b.website : 'https://' + b.website}" target="_blank" style="font-size: 0.8rem; color: var(--accent); text-decoration: none; display: flex; align-items: center; gap: 8px;">${b.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]} <i data-lucide="external-link" style="width: 10px; height: 10px; opacity: 0.7;"></i></a>` : ''}
-                        ${b.linkedin_url ? `<a href="${b.linkedin_url.startsWith('http') ? b.linkedin_url : 'https://' + b.linkedin_url}" target="_blank" style="font-size: 0.8rem; color: var(--accent); text-decoration: none; display: flex; align-items: center; gap: 8px;"><i data-lucide="linkedin" style="width: 14px; height: 14px; opacity: 0.7;"></i> LinkedIn <i data-lucide="external-link" style="width: 10px; height: 10px; opacity: 0.7;"></i></a>` : ''}
-                    </div>
-                </div>
-                <div class="col-actions" style="margin-top: 8px; padding-top: 0; border: none;">
-                    ${b.source_url ? `<a href="${b.source_url}" target="_blank" class="btn-row-action" title="View Source">View</a>` : '-'}
-                </div>
+            const tr = document.createElement('tr');
+            const statusClass = (b.status || '').toLowerCase().includes('active') ? 'status-active' : 'status-pending';
+
+            // Format registration date
+            let regDateDisplay = '—';
+            if (b.registration_date) {
+                try {
+                    const d = new Date(b.registration_date);
+                    regDateDisplay = isNaN(d.getTime())
+                        ? b.registration_date   // raw string if not parseable
+                        : d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+                } catch { regDateDisplay = b.registration_date; }
+            }
+
+            // Email cell
+            const emailHtml = b.email
+                ? `<a href="mailto:${b.email}" class="td-link" title="${b.email}">${b.email}</a>`
+                : '<span class="td-empty">—</span>';
+
+            // Phone cell
+            const phoneHtml = b.phone
+                ? `<span class="td-value">${b.phone}</span>`
+                : '<span class="td-empty">—</span>';
+
+            // Website cell
+            let websiteHtml = '<span class="td-empty">—</span>';
+            if (b.website) {
+                const displayUrl = b.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
+                const href = b.website.startsWith('http') ? b.website : 'https://' + b.website;
+                websiteHtml = `<a href="${href}" target="_blank" class="td-link" title="${b.website}">${displayUrl}</a>`;
+            }
+
+            // LinkedIn cell
+            let linkedinHtml = '<span class="td-empty">—</span>';
+            if (b.linkedin_url) {
+                const href = b.linkedin_url.startsWith('http') ? b.linkedin_url : 'https://' + b.linkedin_url;
+                linkedinHtml = `<a href="${href}" target="_blank" class="td-link td-linkedin">LinkedIn <i data-lucide="external-link" style="width:10px;height:10px;"></i></a>`;
+            }
+
+            tr.innerHTML = `
+                <td class="tcol-name">
+                    <div class="td-company-name" title="${b.company_name}">${b.company_name}</div>
+                    <div class="td-sub">${b.state || ''}${b.state && b.country ? ', ' : ''}${b.country || ''}</div>
+                </td>
+                <td class="tcol-industry">
+                    <span class="td-industry">${b.industry || '—'}</span>
+                </td>
+                <td class="tcol-reg">
+                    <span class="td-mono">${b.registration_number || '—'}</span>
+                    <span class="status-badge ${statusClass} td-status-inline">${b.status || 'Active'}</span>
+                </td>
+                <td class="tcol-regdate">
+                    <span class="td-date">${regDateDisplay}</span>
+                </td>
+                <td class="tcol-address">
+                    <span class="td-value">${b.address || '<span class="td-empty">—</span>'}</span>
+                </td>
+                <td class="tcol-email">${emailHtml}</td>
+                <td class="tcol-phone">${phoneHtml}</td>
+                <td class="tcol-website">${websiteHtml}</td>
+                <td class="tcol-linkedin">${linkedinHtml}</td>
+                <td class="tcol-source">
+                    ${b.source_url ? `<a href="${b.source_url}" target="_blank" class="btn-row-action">View</a>` : '<span class="td-empty">—</span>'}
+                </td>
             `;
-            businessList.appendChild(row);
+            businessList.appendChild(tr);
         });
-        
-        lucide.createIcons({
-            root: businessList
+
+        lucide.createIcons({ root: businessList });
+    }
+
+    function renderLeadsSummary(businesses) {
+        const summaryEl   = document.getElementById('leads-summary');
+        const itemsEl     = document.getElementById('leads-summary-items');
+        const totalCountEl = document.getElementById('leads-total-count');
+        if (!summaryEl || !itemsEl || !totalCountEl) return;
+
+        if (!businesses || businesses.length === 0) {
+            itemsEl.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">No data</span>';
+            totalCountEl.textContent = '0';
+            return;
+        }
+
+        // Tally by source domain
+        const sourceCounts = new Map();
+        businesses.forEach(b => {
+            let label = 'unknown';
+            if (b.source_url) {
+                try {
+                    const host = new URL(b.source_url.startsWith('http') ? b.source_url : 'https://' + b.source_url).hostname.replace('www.', '');
+                    label = host.split('.')[0];
+                } catch { label = 'web'; }
+            } else if (b.country) {
+                label = b.country.toLowerCase();
+            }
+            sourceCounts.set(label, (sourceCounts.get(label) || 0) + 1);
         });
+
+        itemsEl.innerHTML = '';
+        sourceCounts.forEach((count, source) => {
+            const chip = document.createElement('div');
+            chip.className = 'leads-source-chip';
+            chip.innerHTML = `
+                <span class="chip-source-name">${source}</span>
+                <span class="chip-count">${count}</span>
+            `;
+            itemsEl.appendChild(chip);
+        });
+
+        totalCountEl.textContent = businesses.length;
     }
 
     // ─────────────────────────── History ───────────────────────────
@@ -453,19 +532,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         divEl.classList.add('history-item-loading');
         
         // Immediate UI preparation (Instant Feedback)
+        console.log(`[HISTORY] Loading item ID: ${historyId}`);
         isViewingHistory = true;
         activeHistoryId = historyId;
+        
+        // Keep the density-optimized layout as requested
+        if (mainContent) mainContent.classList.add('is-scraping'); 
         
         const tableContainer = document.querySelector('.data-results-container');
         const statsBar = document.querySelector('.stats-row');
         
+        if (tableContainer) tableContainer.classList.remove('hidden');
+        if (statsBar) statsBar.classList.remove('hidden');
+        
         if (tableContainer) {
             tableContainer.classList.remove('hidden');
             businessList.innerHTML = `
-                <div class="card-row-skeleton shimmer"></div>
-                <div class="card-row-skeleton shimmer"></div>
-                <div class="card-row-skeleton shimmer"></div>
-                <div class="card-row-skeleton shimmer"></div>
+                            <tr class="card-row-skeleton shimmer"><td colspan="10"></td></tr>
+                <tr class="card-row-skeleton shimmer"><td colspan="10"></td></tr>
+                <tr class="card-row-skeleton shimmer"><td colspan="10"></td></tr>
+                <tr class="card-row-skeleton shimmer"><td colspan="10"></td></tr>
             `;
             noData.classList.add('hidden');
             tableContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -512,11 +598,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             currentPage = 1; 
 
             // Render first page from snapshot
+            renderLeadsSummary(historyResults);
             const initialPage = historyResults.slice(0, historyMeta.limit);
             renderTable(initialPage);
             forceScrollReset(); 
             
             statTotal.textContent = historyMeta.total;
+            statRecent.textContent = '0';
+            statSkipped.textContent = '0';
+
+            if (exportCsvBtn && historyResults.length > 0) {
+                exportCsvBtn.classList.remove('hidden');
+            }
+
+            const summaryEl = document.getElementById('leads-summary');
+            if (summaryEl) summaryEl.classList.remove('hidden');
+            const tableWrapper = document.querySelector('.data-view-wrapper');
+            if (tableWrapper) tableWrapper.classList.remove('hidden');
 
             if (tableContainer) {
                 const tableHeaderTitle = tableContainer.querySelector('.results-title h2');
@@ -527,9 +625,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // Pagination Display
-            pageInfo.textContent = `Page ${currentPage} of ${historyMeta.pages}`;
-            prevPageBtn.disabled = true;
-            nextPageBtn.disabled = historyMeta.pages <= 1;
+            renderPagination();
+            
+            // Ensure footer is visible
+            const footer = document.querySelector('.results-footer');
+            if (footer) footer.classList.remove('hidden');
+            
+            // Ensure export is fully ready
+            if (exportCsvBtn) {
+                exportCsvBtn.disabled = false;
+                exportCsvBtn.classList.remove('hidden');
+            }
+            
+            console.log(`[HISTORY] Successfully rendered ${historyResults.length} records.`);
 
             showToast(`Loaded ${historyMeta.total} records from ${new Date(item.searched_at).toLocaleDateString()}`);
         } catch (err) {
@@ -655,10 +763,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentPage = 1;
         historyResults = [];
         businessList.innerHTML = `
-            <div class="card-row-skeleton shimmer"></div>
-            <div class="card-row-skeleton shimmer"></div>
-            <div class="card-row-skeleton shimmer"></div>
-            <div class="card-row-skeleton shimmer"></div>
+            <tr class="card-row-skeleton shimmer"><td colspan="10"></td></tr>
+            <tr class="card-row-skeleton shimmer"><td colspan="10"></td></tr>
+            <tr class="card-row-skeleton shimmer"><td colspan="10"></td></tr>
+            <tr class="card-row-skeleton shimmer"><td colspan="10"></td></tr>
         `;
         statRecent.textContent  = '...';
         statSkipped.textContent = '...';
@@ -724,6 +832,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
 
                 // ── INSTANT TABLE RENDER (page 1) ─────────────────────────────
+                renderLeadsSummary(records);
                 renderTable(records.slice(0, currentLimit));
                 renderPagination();
                 forceScrollReset();
@@ -781,6 +890,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ─────────────────────────── Event Listeners ───────────────────────────
 
     function setupEventListeners() {
+        // Drag-to-scroll for the data table
+        const dataWrapper = document.querySelector('.data-view-wrapper');
+        if (dataWrapper) {
+            let isDown = false, startX, scrollLeft;
+            dataWrapper.addEventListener('mousedown', e => {
+                isDown = true;
+                startX = e.pageX - dataWrapper.offsetLeft;
+                scrollLeft = dataWrapper.scrollLeft;
+                dataWrapper.style.cursor = 'grabbing';
+            });
+            document.addEventListener('mouseup', () => {
+                isDown = false;
+                if (dataWrapper) dataWrapper.style.cursor = 'grab';
+            });
+            dataWrapper.addEventListener('mouseleave', () => { isDown = false; dataWrapper.style.cursor = 'grab'; });
+            dataWrapper.addEventListener('mousemove', e => {
+                if (!isDown) return;
+                e.preventDefault();
+                const x = e.pageX - dataWrapper.offsetLeft;
+                dataWrapper.scrollLeft = scrollLeft - (x - startX);
+            });
+        }
+
         logoutBtn.addEventListener('click', () => Auth.logout());
         countrySelectTrigger.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -847,6 +979,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         refreshBtn.addEventListener('click', () => {
+            if (searchInput) searchInput.value = ''; // Clear search text
             clearHistoryMode();
             loadBusinesses(1);
         });
@@ -885,7 +1018,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         searchInput.addEventListener('input', (e) => {
             const term = e.target.value.toLowerCase();
-            document.querySelectorAll('.card-row').forEach(row => {
+            document.querySelectorAll('#business-list tr').forEach(row => {
                 row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
             });
         });
