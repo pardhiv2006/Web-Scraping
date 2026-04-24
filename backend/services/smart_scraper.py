@@ -46,7 +46,9 @@ FALSE_POSITIVE_NAMES = {
     "partner", "president", "founder", "chief", "executive", "officer", "vice", "president",
     "view", "biography", "profile", "team", "leadership", "staff", "employees",
     "advisor", "senior", "legacy", "thank", "services", "solutions", "group",
-    "holdings", "technologies", "inc", "llc", "corp", "co", "ltd", "corporation", "limited"
+    "holdings", "technologies", "inc", "llc", "corp", "co", "ltd", "corporation", "limited",
+    "turned", "retail", "into", "business", "services", "global", "international", "solutions",
+    "pradhan", "tshitij", "kshitij", "featured", "profile", "biography", "linkedin", "page"
 }
 
 EMP_COUNT_RE = re.compile(r'(?:employees|staff|team size|company size)\s*[:|\-]?\s*(\d+[\d,\-s]*\+?)', re.IGNORECASE)
@@ -161,6 +163,11 @@ def _is_valid_name(name: str) -> bool:
     if not all(w[0].isupper() for w in words if w):
         return False
         
+    # Check for non-name words
+    noise_suffixes = ["Featured", "Profile", "Biography", "LinkedIn", "Page", "Services", "Technologies"]
+    if any(w in noise_suffixes for w in words):
+        return False
+
     return True
 
 def _is_valid_phone(phone: str) -> bool:

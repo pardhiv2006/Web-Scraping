@@ -68,7 +68,7 @@ def get_unique_email(domain):
 
 def get_unique_phone(country, biz_id):
     # Country codes logic
-    codes = {"US": "+1", "UK": "+44", "UAE": "+971", "CA": "+1", "AU": "+61"}
+    codes = {"USA": "+1", "UK": "+44", "UAE": "+971", "CA": "+1", "AU": "+61"}
     code = codes.get(country, "+1") 
     
     while True:
@@ -85,7 +85,7 @@ def get_unique_address(city, state, country, biz_id):
     while True:
         route = random.choice(["Main Street", "Business Park Rd", "Commerce Blvd", "Center Ave", "Plaza Way", "Valley Rd"])
         suite = random.randint(100, 9999)
-        addr = f"{suite} {route}, {city_str}, {state or ''}, {country or 'US'}"
+        addr = f"{suite} {route}, {city_str}, {state or ''}, {country or 'USA'}"
         addr = " ".join(addr.split()) # clean multi-spaces
         if addr.lower() not in visited_addresses:
             visited_addresses.add(addr.lower())
@@ -111,7 +111,7 @@ def enrich_record(biz_id):
 
         needs_commit = False
         company_name = biz.company_name
-        country = biz.country or "US"
+        country = biz.country or "USA"
         state = biz.state or "NY"
         
         # 1. Verify / Fetch Website (MUST BE REAL)

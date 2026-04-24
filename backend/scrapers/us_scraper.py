@@ -45,7 +45,7 @@ def _fetch_from_opencorporates(state: str, per_page: int = 50) -> List[Dict]:
                 records.append({
                     "company_name": co.get("name", "").strip(),
                     "registration_number": co.get("company_number", ""),
-                    "country": "US",
+                    "country": "USA",
                     "state": state,
                     "registration_date": co.get("incorporation_date") or None,
                     "address": address,

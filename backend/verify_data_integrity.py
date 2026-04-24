@@ -49,7 +49,7 @@ def run_master_audit():
     
     # 2. Country Breakdown
     country_stats = {}
-    for country in ["US", "UK", "UAE"]:
+    for country in ["USA", "UK", "UAE"]:
         cursor.execute(f"SELECT COUNT(*) FROM businesses WHERE country = '{country}'")
         total = cursor.fetchone()[0]
         cursor.execute(f"SELECT COUNT(*) FROM businesses WHERE country = '{country}' AND ({perf_query})")
@@ -100,7 +100,7 @@ This report provides a comprehensive overview of the data integrity across the e
 ## 🌍 Geographic Breakdown
 | Country | Total Records | Perfect Records | Health % |
 | :--- | :--- | :--- | :--- |
-| **USA** | {country_stats['US']['total']} | {country_stats['US']['perfect']} | {(country_stats['US']['perfect']/country_stats['US']['total']*100):.1f}% |
+| **USA** | {country_stats['USA']['total']} | {country_stats['USA']['perfect']} | {(country_stats['USA']['perfect']/country_stats['USA']['total']*100):.1f}% |
 | **UK** | {country_stats['UK']['total']} | {country_stats['UK']['perfect']} | {(country_stats['UK']['perfect']/country_stats['UK']['total']*100):.1f}% |
 | **UAE** | {country_stats['UAE']['total']} | {country_stats['UAE']['perfect']} | {(country_stats['UAE']['perfect']/country_stats['UAE']['total']*100):.1f}% |
 

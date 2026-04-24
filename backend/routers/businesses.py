@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 import logging
 
+from sqlalchemy import func
 from database import get_db
 from models.business import Business
 
@@ -33,9 +34,9 @@ def get_businesses(
     logger.info(f"GET /businesses → country={country_upper}, state={states_upper}, page={page}, strict={strict}")
 
     if country_upper:
-        query = query.filter(Business.country == country_upper)
+        query = query.filter(func.upper(Business.country) == country_upper)
     if states_upper:
-        query = query.filter(Business.state.in_(states_upper))
+        query = query.filter(func.upper(Business.state).in_(states_upper))
 
     if strict:
         # We now assume the database is kept clean via strict_cleanup.py 

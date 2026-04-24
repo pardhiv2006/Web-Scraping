@@ -25,9 +25,14 @@ _EMPTY = {'', '-', '--', 'n/a', 'N/A', 'none', 'None', 'null', 'NULL',
 
 # Mapping of verbose registry names → platform state codes
 STATE_MAPPING = {
-    "ENGLAND": "ENG", "WALES": "WLS", "SCOTLAND": "SCT",
-    "NORTHERN IRELAND": "NIR", "UNITED STATES": "US",
-    "DUBAI": "DXB", "ABU DHABI": "AUH", "SHARJAH": "SHJ"
+    "ENGLAND": "England",
+    "WALES": "Wales",
+    "SCOTLAND": "Scotland",
+    "NORTHERN IRELAND": "Northern Ireland",
+    "UNITED STATES": "USA",
+    "DUBAI": "Dubai",
+    "ABU DHABI": "Abu Dhabi",
+    "SHARJAH": "Sharjah"
 }
 
 
@@ -88,7 +93,7 @@ def run_scrape(country: str, states: List[str], db: Session, user_id: int = None
     # ── 1. Parallel primary scraping ────────────────────────────────────────
     def fetch_state(state):
         try:
-            if country == "US":
+            if country == "USA":
                 return scrape_us([state])
             elif country == "UK":
                 return scrape_uk([state])
@@ -205,10 +210,10 @@ def run_scrape(country: str, states: List[str], db: Session, user_id: int = None
             .limit(500)
             .all()
         )
-        # Quality filter — only return records with minimum useful data
-        final_records = [b.to_dict() for b in db_rows if is_quality_record(b)]
+        # Return all records found in DB for the selected regions to ensure no data loss
+        final_records = [b.to_dict() for b in db_rows]
         logger.info(
-            f"[Quality] {len(db_rows)} DB rows → {len(final_records)} quality records."
+            f"[Scrape] {len(db_rows)} DB rows retrieved for UI/History."
         )
     except Exception as exc:
         logger.error(f"[Authoritative query] Failed: {exc}")

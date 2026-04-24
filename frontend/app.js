@@ -41,6 +41,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const nextPageBtn = document.getElementById('next-page');
     const pageInfo = document.getElementById('page-info');
 
+    const API_BASE = '/api';
+    const STATE_MAP = {
+        "DXB": "Dubai", "SHJ": "Sharjah", "AJM": "Ajman", "RAK": "Ras Al Khaimah",
+        "AUH": "Abu Dhabi", "UAQ": "Umm Al Quwain", "FUJ": "Fujairah",
+        "SCT": "Scotland", "ENG": "England", "WLS": "Wales", "NIR": "Northern Ireland",
+        "CA": "California", "NY": "New York", "TX": "Texas", "FL": "Florida",
+        "IL": "Illinois", "PA": "Pennsylvania", "OH": "Ohio", "GA": "Georgia"
+    };
+
     // --- State ---
     let selectedCountry = null;
     let selectedStates = new Map();
@@ -52,7 +61,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentScrapeHistoryId = null;  // history ID for the active scrape session
 
     let currentLimit = 35; // Set to 35 for optimal record visibility as requested
-    const API_BASE = '/api';
 
     // --- Modal Logic ---
     const confirmModal = document.getElementById('confirm-modal');
@@ -154,12 +162,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const data = await res.json();
             countryOptions.innerHTML = '';
             
-            if (!data.countries || data.countries.length === 0) {
-                countryOptions.innerHTML = '<div style="padding: 15px; color: var(--text-dim); text-align: center;">No countries found</div>';
-                return;
-            }
+            const allowedCountries = ['UK', 'USA', 'UAE'];
+            const countriesToRender = data.countries.filter(c => allowedCountries.includes(c.code.toUpperCase()));
 
-            data.countries.forEach(c => {
+            countriesToRender.forEach(c => {
                 const div = document.createElement('div');
                 div.className = 'option-item';
                 div.innerHTML = `
@@ -185,7 +191,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         div.classList.remove('selected');
                         resetStates();
                         clearHistoryMode();
-                        loadBusinesses(1);
+                        const tableContainer = document.querySelector('.data-results-container');
+                        const statsBar = document.querySelector('.stats-row');
+                        if (tableContainer) tableContainer.classList.add('hidden');
+                        if (statsBar) statsBar.classList.add('hidden');
+                        statTotal.textContent = '0';
                     }
                 });
                 countryOptions.appendChild(div);
@@ -205,11 +215,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadStates(country.code);
         clearHistoryMode();
         
-        const tableContainer = document.querySelector('.data-results-container');
-        const statsBar = document.querySelector('.stats-row');
-        tableContainer.classList.add('hidden');
-        statsBar.classList.add('hidden');
-        exportCsvBtn.classList.add('hidden');
+        hideResults();
         statTotal.textContent = '0';
     }
 
@@ -221,50 +227,97 @@ document.addEventListener('DOMContentLoaded', async () => {
             stateOptions.innerHTML = '';
             
             if (data.states && data.states.length > 0) {
-                const selectAllDiv = document.createElement('div');
-                selectAllDiv.className = 'option-item';
-                selectAllDiv.innerHTML = `
-                    <input type="checkbox" id="state-all" value="ALL">
-                    <label for="state-all" style="font-weight: 700;">Select All Regions</label>
+                // ── Deduplicate and Normalize States ──────────────────────────
+                const uniqueStates = new Map();
+                data.states.forEach(s => {
+                    const fullName = STATE_MAP[s.code.toUpperCase()] || s.name;
+                    const key = fullName.toLowerCase();
+                    if (!uniqueStates.has(key)) {
+                        uniqueStates.set(key, { name: fullName, codes: [s.code] });
+                    } else {
+                        // Append code if not already present
+                        if (!uniqueStates.get(key).codes.includes(s.code)) {
+                            uniqueStates.get(key).codes.push(s.code);
+                        }
+                    }
+                });
+                
+                const sortedStates = Array.from(uniqueStates.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+                // Add "All Regions" option
+                const allDiv = document.createElement('div');
+                allDiv.className = 'option-item select-all-item';
+                allDiv.style.borderBottom = '1px solid var(--border-dim)';
+                allDiv.style.marginBottom = '5px';
+                allDiv.style.paddingBottom = '10px';
+                allDiv.innerHTML = `
+                    <input type="checkbox" id="state-all" class="state-checkbox-all">
+                    <label for="state-all" style="font-weight: 700;">All Regions</label>
                 `;
-                selectAllDiv.addEventListener('click', (e) => {
-                    const checkbox = selectAllDiv.querySelector('input');
-                    if (e.target.tagName !== 'INPUT') checkbox.checked = !checkbox.checked;
-                    const isChecked = checkbox.checked;
+                
+                allDiv.addEventListener('click', (e) => {
+                    const allCheckbox = allDiv.querySelector('input');
+                    if (e.target.tagName !== 'INPUT') allCheckbox.checked = !allCheckbox.checked;
+                    
+                    const isChecked = allCheckbox.checked;
                     document.querySelectorAll('.state-checkbox').forEach(cb => {
                         cb.checked = isChecked;
-                        const stateName = cb.parentElement.querySelector('label').textContent;
-                        isChecked ? selectedStates.set(cb.value, stateName) : selectedStates.delete(cb.value);
-                        cb.parentElement.classList.toggle('selected', isChecked);
+                        const row = cb.closest('.option-item');
+                        if (isChecked) row.classList.add('selected');
+                        else row.classList.remove('selected');
+                        
+                        const sName = row.querySelector('label').textContent;
+                        if (isChecked) {
+                            const codes = JSON.parse(cb.value);
+                            selectedStates.set(sName, codes);
+                        } else {
+                            selectedStates.delete(sName);
+                        }
                     });
+                    
+                    if (isChecked) allDiv.classList.add('selected');
+                    else allDiv.classList.remove('selected');
+                    
                     updateStateLabel();
                     checkScrapeButton();
+                    hideResults();
                 });
-                stateOptions.appendChild(selectAllDiv);
+                stateOptions.appendChild(allDiv);
 
-                data.states.forEach(state => {
+                sortedStates.forEach(state => {
                     const div = document.createElement('div');
                     div.className = 'option-item';
+                    const codesJson = JSON.stringify(state.codes);
                     div.innerHTML = `
-                        <input type="checkbox" id="state-${state.code}" value="${state.code}" class="state-checkbox">
-                        <label for="state-${state.code}">${state.name}</label>
+                        <input type="checkbox" id="state-${state.codes[0]}" value='${codesJson}' class="state-checkbox">
+                        <label for="state-${state.codes[0]}">${state.name}</label>
                     `;
                     div.addEventListener('click', (e) => {
                         const checkbox = div.querySelector('input');
                         if (e.target.tagName !== 'INPUT') checkbox.checked = !checkbox.checked;
                         
+                        const codes = JSON.parse(checkbox.value);
                         if (checkbox.checked) {
-                            selectedStates.set(state.code, state.name);
+                            selectedStates.set(state.name, codes);
                             div.classList.add('selected');
                         } else {
-                            selectedStates.delete(state.code);
+                            selectedStates.delete(state.name);
                             div.classList.remove('selected');
-                            
-                            const allCb = document.getElementById('state-all');
-                            if(allCb) allCb.checked = false;
                         }
+                        
+                        // Sync "All Regions" checkbox
+                        const allCb = document.getElementById('state-all');
+                        if (allCb) {
+                            const total = document.querySelectorAll('.state-checkbox').length;
+                            const checked = document.querySelectorAll('.state-checkbox:checked').length;
+                            allCb.checked = (total === checked);
+                            if (allCb.checked) allCb.parentElement.classList.add('selected');
+                            else allCb.parentElement.classList.remove('selected');
+                        }
+
                         updateStateLabel();
                         checkScrapeButton();
+                        hideResults();
                     });
                     stateOptions.appendChild(div);
                 });
@@ -277,6 +330,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error("❌ Failed to load regions:", error);
             showToast('Failed to load regions', 'error');
         }
+    }
+
+    function hideResults() {
+        document.querySelector('.data-results-container')?.classList.add('hidden');
+        document.querySelector('.stats-row')?.classList.add('hidden');
+        if (mainContent) mainContent.classList.remove('is-scraping');
     }
 
     function resetStates() {
@@ -312,8 +371,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             params.append('limit', currentLimit);
             params.append('country', selectedCountry.toUpperCase());
             params.append('strict', 'false'); // Always fetch all records, not just fully enriched ones
-            Array.from(selectedStates.keys()).forEach(state => {
-                params.append('state', state.toUpperCase());
+            Array.from(selectedStates.values()).forEach(codes => {
+                codes.forEach(code => {
+                    params.append('state', code.toUpperCase());
+                });
             });
 
             const url = `${API_BASE}/businesses?${params.toString()}`;

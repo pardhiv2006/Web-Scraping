@@ -1,59 +1,25 @@
-"""
-Countries and states/regions router.
-"""
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from database import get_db
+from models.business import Business
 
 router = APIRouter(tags=["Countries"])
 
-COUNTRIES = [
-    {"code": "US", "name": "USA"},
-    {"code": "UK", "name": "UK"},
-    {"code": "UAE", "name": "UAE"},
-]
-
-
-STATES = {
-    "US": [
-        {"code": "CA", "name": "California"},
-        {"code": "TX", "name": "Texas"},
-        {"code": "FL", "name": "Florida"},
-        {"code": "NY", "name": "New York"},
-        {"code": "IL", "name": "Illinois"},
-        {"code": "PA", "name": "Pennsylvania"},
-        {"code": "OH", "name": "Ohio"},
-        {"code": "GA", "name": "Georgia"},
-        {"code": "NC", "name": "North Carolina"},
-        {"code": "MI", "name": "Michigan"},
-        {"code": "NJ", "name": "New Jersey"},
-        {"code": "VA", "name": "Virginia"},
-        {"code": "WA", "name": "Washington"},
-        {"code": "AZ", "name": "Arizona"},
-        {"code": "MA", "name": "Massachusetts"},
-    ],
-    "UK": [
-        {"code": "ENG", "name": "England"},
-        {"code": "SCT", "name": "Scotland"},
-        {"code": "WLS", "name": "Wales"},
-        {"code": "NIR", "name": "Northern Ireland"},
-    ],
-    "UAE": [
-        {"code": "DXB", "name": "Dubai"},
-        {"code": "AUH", "name": "Abu Dhabi"},
-        {"code": "SHJ", "name": "Sharjah"},
-    ],
-}
-
 
 @router.get("/countries")
-def get_countries():
-    """Return list of supported countries."""
-    return {"countries": COUNTRIES}
+def get_countries(db: Session = Depends(get_db)):
+    """Return list of distinct countries from database."""
+    countries = db.query(Business.country).distinct().all()
+    # Filter out None and empty strings
+    country_list = [{"code": c[0], "name": c[0]} for c in countries if c[0] and c[0].strip()]
+    return {"countries": sorted(country_list, key=lambda x: x['name'])}
 
 
 @router.get("/countries/{country_code}/states")
-def get_states(country_code: str):
+def get_states(country_code: str, db: Session = Depends(get_db)):
     """Return available states/regions for a given country."""
     code = country_code.upper()
-    if code not in STATES:
-        return {"error": f"Country '{country_code}' not supported.", "states": []}
-    return {"country": code, "states": STATES[code]}
+    states = db.query(Business.state).filter(Business.country == code).distinct().all()
+    # Filter out None and empty strings
+    state_list = [{"code": s[0], "name": s[0]} for s in states if s[0] and s[0].strip()]
+    return {"country": code, "states": sorted(state_list, key=lambda x: x['name'])}

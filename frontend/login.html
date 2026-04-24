@@ -14,23 +14,26 @@
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            background-color: var(--bg-base-solid);
-            background-image: var(--bg-base);
+            background: var(--bg-base);
+            background-image: 
+                radial-gradient(circle at 0% 0%, #e0e7ff 0%, transparent 50%),
+                radial-gradient(circle at 100% 0%, #f1f5f9 0%, transparent 50%),
+                radial-gradient(circle at 50% 100%, #e0e7ff 0%, transparent 50%);
             position: relative;
         }
 
-        /* Ambient glowing orbs with floating animation */
+        /* Ambient glowing orbs */
         .ambient-orb {
             position: absolute;
             border-radius: 50%;
             filter: blur(120px);
-            opacity: 0.15;
+            opacity: 0.2;
             z-index: 1;
             pointer-events: none;
             animation: orbFloat 20s infinite alternate ease-in-out;
         }
         .orb-1 { width: 500px; height: 500px; background: var(--accent); top: 10%; right: 20%; animation-delay: -2s; }
-        .orb-2 { width: 600px; height: 600px; background: #a855f7; bottom: -10%; left: 10%; animation-duration: 25s; }
+        .orb-2 { width: 600px; height: 600px; background: #818cf8; bottom: -10%; left: 10%; animation-duration: 25s; }
 
         @keyframes orbFloat {
             0% { transform: translate(0, 0) scale(1); }
@@ -39,20 +42,20 @@
             100% { transform: translate(0, 0) scale(1); }
         }
 
-        /* Login Card matching main dashboard card style */
+        /* Login Card */
         .auth-container {
             width: 100%;
             max-width: 460px;
             background: var(--bg-surface);
             padding: 56px;
-            border-radius: var(--radius-lg);
+            border-radius: 32px;
             border: 1px solid var(--border-dim);
-            box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.05);
+            box-shadow: var(--shadow-xl);
             transition: all var(--transition);
             position: relative;
             z-index: 10;
-            backdrop-filter: blur(40px);
-            -webkit-backdrop-filter: blur(40px);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
@@ -62,13 +65,14 @@
             top: -1px; left: 50%;
             transform: translateX(-50%);
             width: 30%;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            height: 2px;
+            background: var(--accent-gradient);
+            border-radius: 2px;
         }
 
         .auth-container:hover {
-            box-shadow: 0 30px 60px rgba(0,0,0,0.6), 0 0 40px rgba(99, 102, 241, 0.1);
-            border-color: var(--border-bright);
+            box-shadow: 0 40px 80px rgba(0,0,0,0.08);
+            border-color: var(--accent);
             transform: translateY(-4px);
         }
 
@@ -88,7 +92,6 @@
 
         .logo-lockup i {
             color: var(--accent);
-            filter: drop-shadow(0 0 10px var(--accent-glow));
             width: 36px;
             height: 36px;
         }
@@ -97,7 +100,7 @@
             font-size: 28px;
             font-weight: 800;
             letter-spacing: -0.03em;
-            background: var(--accent-gradient);
+            background: var(--text-gradient);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -108,11 +111,11 @@
             font-weight: 500;
         }
 
-        /* Tabs matching sidebar format */
+        /* Tabs */
         .auth-tabs {
             display: flex;
             margin-bottom: 32px;
-            background: rgba(0,0,0,0.4);
+            background: var(--bg-panel);
             border-radius: var(--radius-md);
             padding: 4px;
             border: 1px solid var(--border-dim);
@@ -127,19 +130,19 @@
             color: var(--text-tertiary);
             cursor: pointer;
             border-radius: var(--radius-sm);
-            transition: all var(--transition);
+            transition: all var(--transition-fast);
         }
 
         .auth-tab:hover { color: var(--text-primary); }
 
         .auth-tab.active {
-            color: var(--text-primary);
-            background: var(--bg-elevated);
+            color: var(--accent);
+            background: var(--bg-surface);
             box-shadow: var(--shadow-sm);
-            border: 1px solid var(--border-bright);
+            border: 1px solid var(--border-dim);
         }
 
-        /* Form matching command center */
+        /* Form */
         .form-group {
             margin-bottom: 24px;
         }
@@ -147,7 +150,7 @@
         .form-group label {
             display: block;
             font-size: 11px;
-            color: var(--text-secondary);
+            color: var(--text-tertiary);
             margin-bottom: 10px;
             font-weight: 800;
             text-transform: uppercase;
@@ -157,22 +160,21 @@
         .form-group input {
             width: 100%;
             height: 52px;
-            background: rgba(0,0,0,0.4);
+            background: var(--bg-panel);
             border: 1px solid var(--border-strong);
-            border-radius: var(--radius-md);
+            border-radius: 16px;
             padding: 0 20px;
             color: var(--text-primary);
             font-family: 'Inter', sans-serif;
             font-size: 14px;
             outline: none;
-            transition: all var(--transition);
-            box-shadow: inset 0 2px 8px rgba(0,0,0,0.3);
+            transition: all var(--transition-fast);
         }
 
         .form-group input:focus {
             border-color: var(--accent);
-            box-shadow: 0 0 0 4px var(--accent-surface), inset 0 2px 10px rgba(0,0,0,0.3);
-            background: rgba(0,0,0,0.6);
+            box-shadow: 0 0 0 4px var(--accent-glow);
+            background: var(--bg-surface);
         }
 
         /* Submit Button */
