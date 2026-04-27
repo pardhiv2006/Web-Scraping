@@ -43,11 +43,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const API_BASE = '/api';
     const STATE_MAP = {
-        "DXB": "Dubai", "SHJ": "Sharjah", "AJM": "Ajman", "RAK": "Ras Al Khaimah",
-        "AUH": "Abu Dhabi", "UAQ": "Umm Al Quwain", "FUJ": "Fujairah",
+        // UK
         "SCT": "Scotland", "ENG": "England", "WLS": "Wales", "NIR": "Northern Ireland",
+        // USA
         "CA": "California", "NY": "New York", "TX": "Texas", "FL": "Florida",
-        "IL": "Illinois", "PA": "Pennsylvania", "OH": "Ohio", "GA": "Georgia"
+        "IL": "Illinois", "PA": "Pennsylvania", "OH": "Ohio", "GA": "Georgia",
+        // UAE: Display as full names as requested
+        "DXB": "Dubai", "AUH": "Abu Dhabi", "SHJ": "Sharjah", "AJM": "Ajman", 
+        "RAK": "Ras Al Khaimah", "UAQ": "Umm Al Quwain", "FUJ": "Fujairah"
     };
 
     // --- State ---
@@ -230,6 +233,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // ── Deduplicate and Normalize States ──────────────────────────
                 const uniqueStates = new Map();
                 data.states.forEach(s => {
+                // API now returns full names; STATE_MAP is kept as client-side fallback
                     const fullName = STATE_MAP[s.code.toUpperCase()] || s.name;
                     const key = fullName.toLowerCase();
                     if (!uniqueStates.has(key)) {
@@ -388,6 +392,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const businesses = rawBusinesses.filter(b => b.company_name && b.company_name.trim() !== '');
 
             renderTable(businesses);
+            renderLeadsSummary(businesses);
             statTotal.textContent = data.total;
             currentPage = data.page;
             
@@ -485,7 +490,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td class="tcol-website">${websiteHtml}</td>
                 <td class="tcol-linkedin">${linkedinHtml}</td>
                 <td class="tcol-source">
-                    ${b.source_url ? `<a href="${b.source_url}" target="_blank" class="btn-row-action">View</a>` : '<span class="td-empty">—</span>'}
+                    ${(() => {
+                        const url = b.source_url && b.source_url.startsWith('http') 
+                            ? b.source_url 
+                            : `https://www.google.com/search?q=${encodeURIComponent(b.company_name)}+${encodeURIComponent(b.state || '')}+${encodeURIComponent(b.country || '')}`;
+                        return `<a href="${url}" target="_blank" class="btn-row-action">View</a>`;
+                    })()}
                 </td>
             `;
             businessList.appendChild(tr);
@@ -781,7 +791,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (selectedStates.size === 0) {
             stateSelectLabel.textContent = 'Select regions';
         } else if (selectedStates.size === 1) {
-            stateSelectLabel.textContent = selectedStates.values().next().value;
+            // Keys are full names (e.g. 'Dubai'), values are code arrays.
+            stateSelectLabel.textContent = selectedStates.keys().next().value;
         } else {
             stateSelectLabel.textContent = `${selectedStates.size} regions selected`;
         }
@@ -880,28 +891,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // ── Update stats ──────────────────────────────────────────────
                 statRecent.textContent  = s.inserted  ?? 0;
                 statSkipped.textContent = s.skipped_dupes ?? 0;
-                statTotal.textContent   = records.length;
-
-                // ── Store result set for pagination ──────────────────────────
-                isViewingHistory = true;          // use local pagination, not server
+                
+                // Refresh database view to show the total records (including previous ones)
+                // loadBusinesses(1) handles renderTable, renderLeadsSummary, and stats.
+                isViewingHistory = false;
+                await loadBusinesses(1);
+                
                 activeHistoryId  = s.history_id;
-                historyResults   = records;
-                historyMeta = {
-                    total : records.length,
-                    limit : currentLimit,
-                    pages : Math.max(1, Math.ceil(records.length / currentLimit))
-                };
-
-                // ── INSTANT TABLE RENDER (page 1) ─────────────────────────────
-                renderLeadsSummary(records);
-                renderTable(records.slice(0, currentLimit));
-                renderPagination();
-                forceScrollReset();
-
-                // ── Export button ─────────────────────────────────────────────
-                if (records.length > 0 && exportCsvBtn) {
-                    exportCsvBtn.classList.remove('hidden');
-                }
+                historyResults   = records; // Keep for history context if needed
 
                 // ── Table header tag ──────────────────────────────────────────
                 const tableHeaderTitle = tableContainer && tableContainer.querySelector('.results-title h2');
@@ -1009,10 +1006,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         startScrapeBtn.addEventListener('click', handleStartScrape);
 
         exportCsvBtn.addEventListener('click', async () => {
-            if (!selectedCountry) return;
+            const isHistory = isViewingHistory && activeHistoryId;
+            if (!selectedCountry && !isHistory) {
+                showToast('Please select a country or history item first.', 'warning');
+                return;
+            }
+            
             const params = new URLSearchParams();
-            params.append('country', selectedCountry.toUpperCase());
-            Array.from(selectedStates.keys()).forEach(state => params.append('state', state.toUpperCase()));
+            if (isHistory) {
+                params.append('history_id', activeHistoryId);
+            } else {
+                params.append('country', selectedCountry.toUpperCase());
+                Array.from(selectedStates.keys()).forEach(state => params.append('state', state.toUpperCase()));
+            }
 
             const url = `${API_BASE}/export/csv?${params.toString()}`;
             try {
@@ -1021,11 +1027,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 exportCsvBtn.innerHTML = '<span>Preparing...</span>';
 
                 const response = await fetch(url, { headers: Auth.getAuthHeader() });
+                if (!response.ok) throw new Error('Export failed');
+                
                 const blob = await response.blob();
                 const downloadUrl = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = downloadUrl;
-                a.download = `businesses_${selectedCountry.toLowerCase()}.csv`;
+                
+                // Filename based on country or generic 'history'
+                const filenameBase = isHistory ? 'search_history' : (selectedCountry ? selectedCountry.toLowerCase() : 'data');
+                a.download = `businesses_${filenameBase}_${new Date().toISOString().slice(0, 10)}.csv`;
+                
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
@@ -1034,10 +1046,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 exportCsvBtn.disabled = false;
                 showToast('CSV Exported Successfully');
             } catch (error) {
-                showToast('Failed to export CSV', 'error');
+                console.error("Export error:", error);
+                showToast('Failed to export CSV. Please try again.', 'error');
                 exportCsvBtn.disabled = false;
             }
         });
+
 
         refreshBtn.addEventListener('click', () => {
             if (searchInput) searchInput.value = ''; // Clear search text

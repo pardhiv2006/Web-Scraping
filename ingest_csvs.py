@@ -88,19 +88,35 @@ def normalise_country(raw: str) -> str | None:
 
 
 def normalise_state(state: str, country: str) -> str | None:
-    """Normalise state abbreviations to full names."""
+    """Normalise state abbreviations to full names or standard codes."""
     if not state:
         return None
     s = state.strip()
     upper = s.upper()
+    
     if country == "UK":
         return UK_STATE_MAP.get(upper, s)
+    
     if country == "USA":
         # Full name check first
         for abbr, name in US_STATE_MAP.items():
             if upper == name.upper():
                 return name
         return US_STATE_MAP.get(upper, s)
+        
+    if country == "UAE":
+        # Standardize to 3-letter codes
+        uae_map = {
+            "DUBAI": "DXB", "DXB": "DXB",
+            "ABU DHABI": "AUH", "AUH": "AUH",
+            "SHARJAH": "SHJ", "SHJ": "SHJ",
+            "AJMAN": "AJM", "AJM": "AJM",
+            "RAS AL KHAIMAH": "RAK", "RAK": "RAK",
+            "UMM AL QUWAIN": "UAQ", "UAQ": "UAQ",
+            "FUJAIRAH": "FUJ", "FUJ": "FUJ"
+        }
+        return uae_map.get(upper, upper)
+        
     return s
 
 
@@ -117,6 +133,30 @@ def clean_hyperlink(value: str) -> str | None:
 def clean_value(v: str) -> str | None:
     stripped = (v or "").strip()
     return stripped if stripped else None
+
+def is_garbage_company(name):
+    if not name: return True
+    garbage_patterns = [
+        r"Look up any .* LLC",
+        r"Corporations and limited",
+        r"RegisterYourBusiness",
+        r"File Now",
+        r"and Limited",
+        r"and Foreign Limited",
+        r"LLC$",
+        r"LLC\s*$",
+    ]
+    # We want to keep real companies that happen to end in LLC, 
+    # but some patterns are clearly boilerplate.
+    boilerplate = [
+        "Corporations and limited", "and Limited", "and Foreign Limited",
+        "Public limited", "Every limited", "or Limited", "DirectoryScotland Limited"
+    ]
+    if any(bp.lower() in name.lower() for bp in boilerplate):
+        return True
+    if re.search(r"Look up any .* LLC", name, re.I):
+        return True
+    return False
 
 def is_garbage_address(addr):
     if not addr: return True
@@ -229,10 +269,11 @@ def ingest_file(csv_path: str, db) -> dict:
     """Ingest one CSV file. Returns stats dict."""
     inserted = skipped_dup = skipped_excluded = skipped_invalid = 0
 
-    # Build in-memory dedup index: (company_name_lower, country_upper)
+    # Build in-memory dedup index: (company_name_lower, email_lower)
+    # Note: If email is missing, we use (company_name_lower, None)
     existing = {
-        (b.company_name.lower().strip(), b.country.upper().strip())
-        for b in db.query(Business.company_name, Business.country).all()
+        (b.company_name.lower().strip(), (b.state or "").lower().strip(), (b.email or "").lower().strip())
+        for b in db.query(Business.company_name, Business.state, Business.email).all()
     }
 
     with open(csv_path, newline="", encoding="utf-8-sig") as f:
@@ -241,15 +282,17 @@ def ingest_file(csv_path: str, db) -> dict:
             # ── column extraction (handles header name variations) ───────
             company_name = clean_value(
                 row.get("Company Name") or row.get("company_name") or
-                row.get("CompanyName") or row.get("prospect_company_name") or ""
+                row.get("CompanyName") or row.get("prospect_company_name") or 
+                row.get("business_name") or ""
             )
-            if not company_name:
+            if not company_name or is_garbage_company(company_name):
                 skipped_invalid += 1
                 continue
 
             raw_country = clean_value(
                 row.get("Country") or row.get("country") or 
-                row.get("prospect_country_name") or ""
+                row.get("prospect_country_name") or 
+                row.get("business_country_name") or ""
             )
             country = normalise_country(raw_country or "")
             if country is None:
@@ -258,23 +301,11 @@ def ingest_file(csv_path: str, db) -> dict:
 
             raw_state = clean_value(
                 row.get("State") or row.get("state") or
-                row.get("Region") or ""
+                row.get("Region") or row.get("business_region") or ""
             )
             state = normalise_state(raw_state or "", country)
 
-            # ── deduplication check ──────────────────────────────────────
-            key = (company_name.lower(), country.upper())
-            if key in existing:
-                skipped_dup += 1
-                continue
-            existing.add(key)  # prevent double-insert within same file
-
-            # ── field extraction ─────────────────────────────────────────
-            address_raw = clean_value(
-                row.get("Address") or row.get("address") or ""
-            )
-            
-            # Email extraction (handle prospect JSON format)
+            # ── field extraction (Email first for deduplication) ─────────
             email = clean_value(row.get("Email") or row.get("email") or "")
             if not email and row.get("contact_emails"):
                 try:
@@ -287,6 +318,20 @@ def ingest_file(csv_path: str, db) -> dict:
                         email = prof[0] if prof else emails[0]["address"]
                 except:
                     email = row.get("contact_professions_email") or ""
+
+            # ── deduplication check (Company Name + State + Email) ───────────────
+            email_check = (email or "").lower().strip()
+            state_check = (state or "").lower().strip()
+            key = (company_name.lower(), state_check, email_check)
+            if key in existing:
+                skipped_dup += 1
+                continue
+            existing.add(key)  # prevent double-insert within same file
+
+            # ── field extraction continued ───────────────────────────────
+            address_raw = clean_value(
+                row.get("Address") or row.get("address") or ""
+            )
             
             # Phone extraction
             phone_raw = row.get("Phone") or row.get("phone") or row.get("contact_mobile_phone") or ""
@@ -294,20 +339,25 @@ def ingest_file(csv_path: str, db) -> dict:
 
             website = clean_hyperlink(
                 row.get("Website") or row.get("website") or 
-                row.get("prospect_company_website") or ""
+                row.get("prospect_company_website") or 
+                row.get("business_website") or ""
             )
             linkedin_url = clean_hyperlink(
                 row.get("LinkedIn Profile") or row.get("linkedin_url") or 
-                row.get("prospect_company_linkedin") or ""
+                row.get("prospect_company_linkedin") or 
+                row.get("firmo_linkedin_profile") or ""
             )
             industry = normalise_industry(
-                row.get("Industry") or row.get("industry") or ""
+                row.get("Industry") or row.get("industry") or 
+                row.get("firmo_linkedin_industry_category") or ""
             )
             description = clean_value(
-                row.get("Description") or row.get("description") or ""
+                row.get("Description") or row.get("description") or 
+                row.get("firmo_business_description") or ""
             )
             city = clean_value(
-                row.get("City") or row.get("city") or ""
+                row.get("City") or row.get("city") or 
+                row.get("firmo_city_name") or ""
             )
             if city and city.upper() == "CA": city = ""
 

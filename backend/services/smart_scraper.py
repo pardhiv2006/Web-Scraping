@@ -692,10 +692,36 @@ def _ai_research(company_name: str, state: str = "", industry_hint: str = "", co
 
 
         
-        response = g4f.ChatCompletion.create(
-            model=g4f.models.default,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        # Use multiple fast providers to ensure speed and bypass blocks
+        providers = [
+            g4f.Provider.Blackbox,
+            g4f.Provider.ChatgptNext,
+            g4f.Provider.DuckDuckGo,
+            g4f.Provider.GigaChat
+        ]
+        
+        response = None
+        for provider in providers:
+            try:
+                response = g4f.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    provider=provider,
+                    messages=[{"role": "user", "content": prompt}],
+                    timeout=15
+                )
+                if response and "{" in response:
+                    break
+            except Exception:
+                continue
+        
+        if not response:
+            # Final attempt with default
+            response = g4f.ChatCompletion.create(
+                model=g4f.models.default,
+                messages=[{"role": "user", "content": prompt}],
+                timeout=20
+            )
+
         
         # Strip potential markdown and find the actual JSON string
         clean_resp = re.sub(r'```json\s*|\s*```', '', response).strip()

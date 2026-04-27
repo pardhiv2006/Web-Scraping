@@ -25,14 +25,32 @@ _EMPTY = {'', '-', '--', 'n/a', 'N/A', 'none', 'None', 'null', 'NULL',
 
 # Mapping of verbose registry names → platform state codes
 STATE_MAPPING = {
+    # UK
     "ENGLAND": "England",
     "WALES": "Wales",
     "SCOTLAND": "Scotland",
     "NORTHERN IRELAND": "Northern Ireland",
-    "UNITED STATES": "USA",
-    "DUBAI": "Dubai",
-    "ABU DHABI": "Abu Dhabi",
-    "SHARJAH": "Sharjah"
+    # USA
+    "CA": "California",
+    "NY": "New York",
+    "TX": "Texas",
+    "FL": "Florida",
+    "GA": "Georgia",
+    # UAE: Standardized to codes
+    "DUBAI": "DXB",
+    "DXB": "DXB",
+    "ABU DHABI": "AUH",
+    "AUH": "AUH",
+    "SHARJAH": "SHJ",
+    "SHJ": "SHJ",
+    "AJMAN": "AJM",
+    "AJM": "AJM",
+    "RAS AL KHAIMAH": "RAK",
+    "RAK": "RAK",
+    "UMM AL QUWAIN": "UAQ",
+    "UAQ": "UAQ",
+    "FUJAIRAH": "FUJ",
+    "FUJ": "FUJ"
 }
 
 
@@ -43,7 +61,7 @@ def _is_blank(value) -> bool:
 
 def _get_synthetic_reg_date() -> str:
     """Generate a random ISO date within the last 30-270 days."""
-    days_ago = random.randint(30, 270)
+    days_ago = random.randint(30, 180)
     target_date = datetime.now() - timedelta(days=days_ago)
     return target_date.strftime("%Y-%m-%d")
 
@@ -200,14 +218,15 @@ def run_scrape(country: str, states: List[str], db: Session, user_id: int = None
     #   • Any previously enriched fields (email, website, phone …) are included.
     #   • Live UI render and History snapshot use the EXACT same data.
     try:
+        from sqlalchemy import func
         db_rows = (
             db.query(Business)
             .filter(
-                Business.country == country.upper(),
-                Business.state.in_(norm_states)
+                func.upper(Business.country) == country.upper(),
+                func.upper(Business.state).in_([s.upper() for s in states])
             )
             .order_by(Business.scraped_at.desc())
-            .limit(500)
+            .limit(1000)  # Increased limit for better coverage
             .all()
         )
         # Return all records found in DB for the selected regions to ensure no data loss

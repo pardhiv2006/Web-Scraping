@@ -1673,9 +1673,7 @@ body {
 
 /* ===== RESPONSIVENESS ===== */
 @media (max-width: 1400px) {
-    .tcol-regdate {
-        display: none;
-    }
+    /* No longer hiding regdate */
 }
 
 @media (max-width: 1200px) {

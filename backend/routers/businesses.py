@@ -29,12 +29,14 @@ def get_businesses(
     """
     query = db.query(Business)
 
-    country_upper = country.strip().upper() if country else None
+    from services.enrichment_service import normalize_country
+    country_norm = normalize_country(country)
     states_upper = [s.strip().upper() for s in state] if state else None
-    logger.info(f"GET /businesses → country={country_upper}, state={states_upper}, page={page}, strict={strict}")
+    logger.info(f"GET /businesses → country={country_norm}, state={states_upper}, page={page}, strict={strict}")
 
-    if country_upper:
-        query = query.filter(func.upper(Business.country) == country_upper)
+    if country_norm:
+        query = query.filter(func.upper(Business.country) == country_norm.upper())
+
     if states_upper:
         query = query.filter(func.upper(Business.state).in_(states_upper))
 
