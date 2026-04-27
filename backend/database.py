@@ -15,10 +15,11 @@ DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'bu
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
-    pool_size=20,
-    max_overflow=40,
-    pool_timeout=60
+    pool_size=30,
+    max_overflow=60,
+    pool_timeout=90
 )
+
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

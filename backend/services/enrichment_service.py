@@ -87,9 +87,10 @@ def enrich_business(db: Session, business_id: int) -> bool:
             ]
             for f in fields_to_merge:
                 val = info.get(f)
-                if val and (not getattr(biz, f) or getattr(biz, f) in ["", "-", "None"]):
+                if val and (not getattr(biz, f) or str(getattr(biz, f)).strip().lower() in ["", "-", "none", "null", "not available"]):
                     setattr(biz, f, val)
                     updated = True
+
         except Exception as e:
             logger.error(f"Scrape error for {biz.company_name}: {e}")
 
@@ -103,11 +104,12 @@ def enrich_business(db: Session, business_id: int) -> bool:
     
     remaining_blanks = [
         f for f in all_target_fields
-        if not getattr(biz, f) or str(getattr(biz, f)).strip() in ["", "-", "None", "null"]
+        if not getattr(biz, f) or str(getattr(biz, f)).strip().lower() in ["", "-", "none", "null", "not available"]
     ]
 
+
     if remaining_blanks:
-        logger.info(f"[Perfect-Completion] Finalizing {len(remaining_blanks)} fields for {biz.company_name}...")
+        logger.info(f"[Research] Filling {len(remaining_blanks)} fields for {biz.company_name}...")
         from services.smart_scraper import _ai_research
         ai_data = _ai_research(biz.company_name, state=biz.state or "", country=biz.country or "US")
         
@@ -117,29 +119,25 @@ def enrich_business(db: Session, business_id: int) -> bool:
                 setattr(biz, field, str(val))
                 updated = True
             else:
-                # Absolute last resort fallbacks to guarantee 0 blanks
-                if field == "industry": setattr(biz, field, "General Business"); updated = True
-                elif field == "description": setattr(biz, field, f"A professional company based in {biz.state or 'the region'}."); updated = True
-                elif field == "employee_count": setattr(biz, field, "10-50"); updated = True
-                elif field == "revenue": setattr(biz, field, "$1M - $5M"); updated = True
-                elif field == "status": setattr(biz, field, "Active"); updated = True
-                elif field == "registration_date": 
-                    days_ago = random.randint(30, 180)
-                    biz.registration_date = (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+                # If AI also fails, set as "Not Available" for primary fields, or leave empty for secondary
+                if field in ["email", "phone", "website", "ceo_name"]:
+                    if not getattr(biz, field):
+                        setattr(biz, field, "Not Available")
+                        updated = True
+                elif field == "status":
+                    setattr(biz, field, "Active")
                     updated = True
-                elif field == "website": setattr(biz, field, "Not Available"); updated = True
-                elif field == "email": setattr(biz, field, "Not Available"); updated = True
-                elif field == "phone": setattr(biz, field, "Not Available"); updated = True
-                elif field == "ceo_name": setattr(biz, field, "Managing Director"); updated = True
-                elif field == "founder_name": setattr(biz, field, biz.ceo_name or "Founder"); updated = True
-                elif field == "ceo_email": setattr(biz, field, biz.email or "Not Available"); updated = True
-                elif field == "linkedin_url": setattr(biz, field, "Not Available"); updated = True
-                elif field == "address": setattr(biz, field, f"Business District, {biz.state or 'Main City'}"); updated = True
-                elif field == "source_url": setattr(biz, field, biz.website or "https://www.google.com"); updated = True
+                elif field == "source_url":
+                    if not biz.website or biz.website == "Not Available":
+                        setattr(biz, field, "https://www.google.com/search?q=" + quote_plus(biz.company_name))
+                    else:
+                        setattr(biz, field, biz.website)
+                    updated = True
 
     if updated:
         db.commit()
         db.refresh(biz)
-        logger.info(f"[Done] Cleaned & Enriched: {biz.company_name}")
+        logger.info(f"[Done] Enriched: {biz.company_name}")
+
     
     return updated

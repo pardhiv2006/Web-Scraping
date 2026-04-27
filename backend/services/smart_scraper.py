@@ -18,6 +18,8 @@ import os
 import requests
 import time
 import random
+import threading
+
 from urllib.parse import urljoin, urlparse, quote as urlquote, quote_plus
 from typing import Optional, List, Dict
 
@@ -93,12 +95,12 @@ def _is_website_functional(url: str) -> Optional[str]:
         r = requests.get(url, timeout=10, headers=HEADERS, verify=False, allow_redirects=True)
         if r.status_code < 400 and len(r.text) > 500:
             final_url = r.url.rstrip("/")
-            if not any(j in final_url.lower() for j in JUNK_DOMAINS):
-                # Extra check: make sure we didn't just land on a different search engine or a debt collector
-                return final_url
+            # DO NOT check junk domains here yet, as some official sites might redirect through tracking
+            return final_url
     except Exception:
         pass
     return None
+
 
 
 # Generic email prefixes that are not real contacts
@@ -134,8 +136,17 @@ JUNK_DOMAINS = [
     "microsoft.com", "apple.com", "amazon.com", "google.com", "bing.com", "yahoo.com",
     "pissedconsumer.com", "complaintsboard.com", "trustpilot.com", "ripoffreport.com",
     "scamadviser.com", "sitejabber.com", "expert-reviews.com", "glassdoor.co.uk",
-    "allbiz.com", "bizapedia.com", "opencorporates.com", "find-and-update.company-information"
+    "allbiz.com", "bizapedia.com", "opencorporates.com", "find-and-update.company-information",
+    "gov.uk", "directory", "listing", "business-area", "chamberofcommerce.com", "builtinsf.com",
+    "tunein.com", "local.com", "citysearch.com", "merchantcircle.com", "mapquest.co.uk",
+    "yell.com", "thomsonlocal.com", "scoot.co.uk", "freeindex.co.uk", "cylex-uk.co.uk",
+    "checkatrade.com", "trustatrader.com", "ratedpeople.com", "bark.com", "upwork.com",
+    "fiverr.com", "toptal.com", "freelancer.com", "guru.com", "endole.co.uk", "pomanda.com",
+    "uk.globaldatabase.com", "northdata.com", "companieshouse.gov.uk", "companies-house"
 ]
+
+
+
 
 
 def _is_valid_name(name: str) -> bool:
@@ -170,20 +181,51 @@ def _is_valid_name(name: str) -> bool:
 
     return True
 
+def _is_official_website(url: str, company_name: str) -> bool:
+    """Check if the URL is likely the official website based on domain similarity."""
+    if not url or not company_name: return False
+    url = url.lower()
+    if any(junk in url for junk in JUNK_DOMAINS): return False
+    
+    parsed = urlparse(url)
+    domain = parsed.netloc.replace("www.", "").split(".")[0]
+    
+    # Clean company name for comparison
+    name_clean = re.sub(r'[^a-z0-9]', '', company_name.lower())
+    # Remove common corporate suffixes
+    name_clean = re.sub(r'(inc|llc|ltd|corp|corporation|limited|group|services|solutions)$', '', name_clean)
+    
+    if not name_clean: return False
+    
+    # Check if domain contains a significant part of the company name
+    if domain in name_clean or name_clean in domain:
+        return True
+        
+    # Check for abbreviations (e.g. "ABC" for "Alpha Beta Company")
+    if len(domain) >= 3 and domain in name_clean:
+        return True
+        
+    return False
+
 def _is_valid_phone(phone: str) -> bool:
-    """Reject placeholder phones like +1 000 000 0000."""
+    """Reject placeholder phones like +1 000 000 0000 and ensure correct formatting."""
     if not phone: return False
     digits = re.sub(r"\D", "", phone)
     
-    # Reject if too few digits or mostly zeros
-    if len(digits) < 7: return False
-    if digits.count('0') > (0.7 * len(digits)): return False
+    # Reject if too few digits (must have at least 9 for most international/US numbers)
+    if len(digits) < 9: return False
+    # Reject if mostly zeros
+    if digits.count('0') > (0.6 * len(digits)): return False
     
     # Reject common placeholders
-    if "000000" in digits or "123456" in digits:
+    if "000000" in digits or "123456" in digits or "999999" in digits:
         return False
         
+    # Ensure it starts with something reasonable (not just 000)
+    if digits.startswith("000"): return False
+        
     return True
+
 
 
 def _clean_address_logic(addr: str) -> str:
@@ -252,53 +294,64 @@ def _is_placeholder_email(email: str, company_name: str = "") -> bool:
     return False
 
 
-# ── HTTP Fetch ────────────────────────────────────────────────────
+# Global semaphore to limit Selenium instances to 4 at a time to prevent RAM exhaustion
+SELENIUM_SEMAPHORE = threading.Semaphore(4)
+
 def _fetch(url: str, timeout: int = 15) -> str:
     import time
     import random
-    time.sleep(random.uniform(0.5, 2.0))
+    # Small jitter to avoid synchronized bursts
+    time.sleep(random.uniform(0.1, 0.5))
+
     try:
         resp = requests.get(url, headers=HEADERS, timeout=timeout,
                             verify=False, allow_redirects=True)
         html = resp.text if resp.status_code == 200 else ""
         
-        if html and len(html) > 1000:
-            if "wix.com" in html or "parastorage.com" in html or "squarespace" in html:
+        if html and len(html) > 2000:
+            # If we got a decent amount of HTML, only fallback to Selenium if we 
+            # find clear evidence of JS-rendering needed for contact info
+            js_indicators = ["wix.com", "parastorage.com", "squarespace", "react", "vue", "angular"]
+            if any(ind in html.lower() for ind in js_indicators):
                 logger.info(f"JS-heavy site detected ({url}), using Selenium fallback.")
             else:
                 return html
+
         
-        # Selenium fallback
-        from selenium import webdriver
-        from selenium.webdriver.chrome.options import Options
-        from selenium.webdriver.chrome.service import Service
-        
-        chrome_bin = os.getenv("CHROME_BIN", "")
-        driver_path = os.getenv("CHROMEDRIVER_PATH", "")
-        
-        opts = Options()
-        if chrome_bin:
-            opts.binary_location = chrome_bin
-        opts.add_argument("--headless")
-        opts.add_argument("--no-sandbox")
-        opts.add_argument("--disable-dev-shm-usage")
-        opts.add_argument("--disable-gpu")
-        
-        if driver_path:
-            service = Service(driver_path)
-        else:
-            from webdriver_manager.chrome import ChromeDriverManager
-            service = Service(ChromeDriverManager().install())
+        # Selenium fallback with semaphore
+        with SELENIUM_SEMAPHORE:
+            from selenium import webdriver
+            from selenium.webdriver.chrome.options import Options
+            from selenium.webdriver.chrome.service import Service
             
-        driver = webdriver.Chrome(service=service, options=opts)
-        driver.set_page_load_timeout(15)
-        try:
-            driver.get(url)
-            import time
-            time.sleep(2)
-            return driver.page_source
-        finally:
-            driver.quit()
+            chrome_bin = os.getenv("CHROME_BIN", "")
+            driver_path = os.getenv("CHROMEDRIVER_PATH", "")
+            
+            opts = Options()
+            if chrome_bin:
+                opts.binary_location = chrome_bin
+            opts.add_argument("--headless")
+            opts.add_argument("--no-sandbox")
+            opts.add_argument("--disable-dev-shm-usage")
+            opts.add_argument("--disable-gpu")
+            opts.add_argument("--window-size=1920,1080")
+            
+            if driver_path:
+                service = Service(driver_path)
+            else:
+                from webdriver_manager.chrome import ChromeDriverManager
+                service = Service(ChromeDriverManager().install())
+                
+            driver = webdriver.Chrome(service=service, options=opts)
+            driver.set_page_load_timeout(15)
+            try:
+                driver.get(url)
+                # Shorter sleep for faster throughput
+                time.sleep(1.5)
+                return driver.page_source
+            finally:
+                driver.quit()
+
     except Exception as e:
         logger.debug(f"fetch error {url}: {e}")
     return ""
@@ -671,48 +724,56 @@ def _ai_research(company_name: str, state: str = "", industry_hint: str = "", co
         location = f"{state or ''}, {country or ''}".strip(", ")
         
         prompt = (
-            f"As an expert business analyst, research and finalize the profile for '{company_name}' in {location}. "
-            "You MUST provide realistic values for ALL fields below. "
-            "If exact data is NOT publicly available, use a HIGHLY REALISTIC approximation based on industry standards for companies of this size/region. "
-            "Do NOT leave any field null or empty. "
+            f"As an expert business analyst, research the profile for '{company_name}' in {location}. "
+            "STRICT REQUIREMENT: Provide ONLY REAL, VERIFIABLE data. "
+            "If exact data is NOT publicly available, you MUST return 'Not Available' for that field. "
+            "DO NOT approximate, DO NOT guess, DO NOT generate fake emails or placeholder phone numbers. "
+            "Accuracy is more important than completeness. "
             "Provide: "
-            "1. Official Website URL. "
+            "1. Official Website URL (MUST be the actual company homepage, NOT a directory). "
             "2. CEO or Managing Director Full Name. "
-            "3. Business Phone. "
+            "3. Business Phone (Include country code, e.g. +971...). "
             "4. Main Contact Email. "
             "5. Primary Industry. "
-            "6. Estimated Annual Revenue (convert to USD $). "
-            "7. Total Employee Count (current number or range). "
-            "8. Full Office Address (Street, City, Postal Code). "
-            "9. Company Registration Date (YYYY-MM-DD format). "
+            "6. Estimated Annual Revenue (convert to USD $ if possible). "
+            "7. Total Employee Count. "
+            "8. Full Office Address. "
+            "9. Company Registration Date (YYYY-MM-DD). "
             "10. Specific City of operation. "
             "Return ONLY a clean JSON object with keys: 'website', 'ceo_name', 'phone', 'email', 'industry', 'revenue', 'employee_count', 'address', 'registration_date', 'city'. "
-            "No markdown, just raw JSON. Total accuracy for real data; high realism for approximations."
+            "No markdown, just raw JSON."
         )
 
-
-        
-        # Use multiple fast providers to ensure speed and bypass blocks
+        # ULTRA-SPEED: Exhaustive list of every known working free provider
         providers = [
-            g4f.Provider.Blackbox,
-            g4f.Provider.ChatgptNext,
-            g4f.Provider.DuckDuckGo,
-            g4f.Provider.GigaChat
+            g4f.Provider.Blackbox, g4f.Provider.ChatgptNext, g4f.Provider.DuckDuckGo,
+            g4f.Provider.GigaChat, g4f.Provider.Liaobots, g4f.Provider.FreeNetfly,
+            g4f.Provider.You, g4f.Provider.Aichat, g4f.Provider.AiChatOnline,
+            g4f.Provider.Bing, g4f.Provider.Chatgpt4Online, g4f.Provider.Chatanywhere,
+            g4f.Provider.HashNode, g4f.Provider.DeepInfra, g4f.Provider.Koala,
+            g4f.Provider.FlowGpt, g4f.Provider.Vercel, g4f.Provider.ChatBase,
+            g4f.Provider.HuggingChat, g4f.Provider.PerplexityLabs
         ]
+        
+        # Shuffle to distribute load
+        random.shuffle(providers)
         
         response = None
         for provider in providers:
             try:
+                # Use faster models like gpt-4o-mini or mistral if available
+                model = "gpt-4o-mini" if provider in [g4f.Provider.Blackbox, g4f.Provider.You] else "gpt-3.5-turbo"
                 response = g4f.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
+                    model=model,
                     provider=provider,
                     messages=[{"role": "user", "content": prompt}],
-                    timeout=15
+                    timeout=8 # Very aggressive timeout
                 )
                 if response and "{" in response:
                     break
             except Exception:
                 continue
+
         
         if not response:
             # Final attempt with default
@@ -863,7 +924,7 @@ def serper_search(query: str) -> Optional[str]:
     except Exception: pass
     return None
 
-def _bing_search_fallback(query: str) -> Optional[str]:
+def _bing_search_fallback(query: str, company_name: str) -> Optional[str]:
     """Fallback search using Bing for website discovery."""
     try:
         encoded = quote_plus(query)
@@ -873,13 +934,14 @@ def _bing_search_fallback(query: str) -> Optional[str]:
             soup = BeautifulSoup(resp.text, "html.parser")
             for a in soup.select("li.b_algo h2 a"):
                 href = a.get("href", "")
-                if href and href.startswith("http") and not any(j in href.lower() for j in JUNK_DOMAINS):
+                if href and href.startswith("http"):
                     functional_url = _is_website_functional(href)
-                    if functional_url:
+                    if functional_url and _is_official_website(functional_url, company_name):
                         return functional_url
     except Exception as e:
         logger.debug(f"Bing search error: {e}")
     return None
+
 
 def discover_company_info(company_name: str, state: str = "", country: str = "") -> dict:
     data: dict[str, Optional[str]] = {"website": None, "linkedin_url": None, "phone": None, "email": None}
@@ -889,9 +951,9 @@ def discover_company_info(company_name: str, state: str = "", country: str = "")
     # 1. Serper (if available)
     if os.getenv("SERPER_API_KEY"):
         website = serper_search(q)
-        if website and not any(j in website.lower() for j in JUNK_DOMAINS):
+        if website:
             functional_url = _is_website_functional(website)
-            if functional_url:
+            if functional_url and _is_official_website(functional_url, company_name):
                 data["website"] = functional_url
     
     # 2. DDGS
@@ -901,16 +963,17 @@ def discover_company_info(company_name: str, state: str = "", country: str = "")
             with DDGS() as ddgs:
                 for r in ddgs.text(q, max_results=5):
                     href = r.get("href", "")
-                    if href and not any(j in href.lower() for j in JUNK_DOMAINS):
+                    if href:
                         functional_url = _is_website_functional(href)
-                        if functional_url:
+                        if functional_url and _is_official_website(functional_url, company_name):
                             data["website"] = functional_url
                             break
         except Exception: pass
 
     # 3. Bing Fallback
     if not data["website"]:
-        data["website"] = _bing_search_fallback(q)
+        data["website"] = _bing_search_fallback(q, company_name)
+
 
     # 4. LinkedIn Discovery
     if not data["linkedin_url"]:
