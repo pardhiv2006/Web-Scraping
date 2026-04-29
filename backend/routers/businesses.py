@@ -43,14 +43,21 @@ def get_businesses(
         norm_states = [STATE_MAPPING.get(s, s).upper() for s in states_upper]
         query = query.filter(func.upper(Business.state).in_(norm_states))
 
+    # Always exclude records with missing core identifying information
+    query = query.filter(
+        Business.company_name != None, 
+        Business.company_name != "",
+        Business.address != None,
+        Business.address != ""
+    )
+
     if strict:
-        # We now assume the database is kept clean via strict_cleanup.py 
-        # and other ingestion-time checks. Removing runtime slow filters.
+        # Additional strictness could be added here if needed in the future
         pass
 
     total = query.count()
     records = (
-        query.order_by(Business.scraped_at.desc())
+        query.order_by(Business.company_name.asc(), Business.registration_number.asc())
         .offset((page - 1) * limit)
         .limit(limit)
         .all()
