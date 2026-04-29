@@ -21,7 +21,7 @@ def audit_blanks():
     columns = rows[0].keys()
     
     # Placeholders to consider as blank
-    placeholders = {'n/a', 'unknown', 'not found', 'placeholder', 'none', 'null'}
+    placeholders = {'n/a', 'unknown', 'not found', 'placeholder', 'none', 'null', 'not available', '-', 'undefined'}
 
     def is_blank(val):
         if val is None:
