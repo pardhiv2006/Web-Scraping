@@ -36,21 +36,21 @@ STATE_MAPPING = {
     "TX": "Texas",
     "FL": "Florida",
     "GA": "Georgia",
-    # UAE: Standardized to codes
-    "DUBAI": "DXB",
-    "DXB": "DXB",
-    "ABU DHABI": "AUH",
-    "AUH": "AUH",
-    "SHARJAH": "SHJ",
-    "SHJ": "SHJ",
-    "AJMAN": "AJM",
-    "AJM": "AJM",
-    "RAS AL KHAIMAH": "RAK",
-    "RAK": "RAK",
-    "UMM AL QUWAIN": "UAQ",
-    "UAQ": "UAQ",
-    "FUJAIRAH": "FUJ",
-    "FUJ": "FUJ"
+    # UAE: Standardized to Full Names
+    "DUBAI": "Dubai",
+    "DXB": "Dubai",
+    "ABU DHABI": "Abu Dhabi",
+    "AUH": "Abu Dhabi",
+    "SHARJAH": "Sharjah",
+    "SHJ": "Sharjah",
+    "AJMAN": "Ajman",
+    "AJM": "Ajman",
+    "RAS AL KHAIMAH": "Ras Al Khaimah",
+    "RAK": "Ras Al Khaimah",
+    "UMM AL QUWAIN": "Umm Al Quwain",
+    "UAQ": "Umm Al Quwain",
+    "FUJAIRAH": "Fujairah",
+    "FUJ": "Fujairah"
 }
 
 
@@ -219,11 +219,13 @@ def run_scrape(country: str, states: List[str], db: Session, user_id: int = None
     #   • Live UI render and History snapshot use the EXACT same data.
     try:
         from sqlalchemy import func
+        # Use normalized state codes for the query to ensure match with DB contents
+        norm_states_upper = [s.upper() for s in norm_states]
         db_rows = (
             db.query(Business)
             .filter(
                 func.upper(Business.country) == country.upper(),
-                func.upper(Business.state).in_([s.upper() for s in states])
+                func.upper(Business.state).in_(norm_states_upper)
             )
             .order_by(Business.scraped_at.desc())
             .limit(1000)  # Increased limit for better coverage

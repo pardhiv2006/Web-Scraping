@@ -9,17 +9,28 @@ router = APIRouter(tags=["Countries"])
 _STATE_DISPLAY = {
     # UAE emirates
     "DXB": "Dubai",
+    "DUBAI": "Dubai",
     "AUH": "Abu Dhabi",
+    "ABU DHABI": "Abu Dhabi",
     "SHJ": "Sharjah",
+    "SHARJAH": "Sharjah",
     "AJM": "Ajman",
+    "AJMAN": "Ajman",
     "RAK": "Ras Al Khaimah",
+    "RAS AL KHAIMAH": "Ras Al Khaimah",
     "UAQ": "Umm Al Quwain",
+    "UMM AL QUWAIN": "Umm Al Quwain",
     "FUJ": "Fujairah",
+    "FUJAIRAH": "Fujairah",
     # UK regions
     "SCT": "Scotland",
+    "SCOTLAND": "Scotland",
     "ENG": "England",
+    "ENGLAND": "England",
     "WLS": "Wales",
+    "WALES": "Wales",
     "NIR": "Northern Ireland",
+    "NORTHERN IRELAND": "Northern Ireland",
 }
 
 

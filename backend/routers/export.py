@@ -47,7 +47,10 @@ def export_csv(
         if country_norm:
             query = query.filter(func.upper(Business.country) == country_norm.upper())
         if states_upper:
-            query = query.filter(func.upper(Business.state).in_(states_upper))
+            # Use shared STATE_MAPPING to ensure query matches DB normalization
+            from services.scrape_service import STATE_MAPPING
+            norm_states = [STATE_MAPPING.get(s, s).upper() for s in states_upper]
+            query = query.filter(func.upper(Business.state).in_(norm_states))
 
 
         db_records = query.order_by(Business.scraped_at.desc()).all()

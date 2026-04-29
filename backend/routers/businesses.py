@@ -38,7 +38,10 @@ def get_businesses(
         query = query.filter(func.upper(Business.country) == country_norm.upper())
 
     if states_upper:
-        query = query.filter(func.upper(Business.state).in_(states_upper))
+        # Use shared STATE_MAPPING to ensure query matches DB normalization
+        from services.scrape_service import STATE_MAPPING
+        norm_states = [STATE_MAPPING.get(s, s).upper() for s in states_upper]
+        query = query.filter(func.upper(Business.state).in_(norm_states))
 
     if strict:
         # We now assume the database is kept clean via strict_cleanup.py 

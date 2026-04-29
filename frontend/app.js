@@ -44,13 +44,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     const API_BASE = '/api';
     const STATE_MAP = {
         // UK
-        "SCT": "Scotland", "ENG": "England", "WLS": "Wales", "NIR": "Northern Ireland",
+        "SCT": "Scotland", "SCOTLAND": "Scotland",
+        "ENG": "England", "ENGLAND": "England",
+        "WLS": "Wales", "WALES": "Wales",
+        "NIR": "Northern Ireland", "NORTHERN IRELAND": "Northern Ireland",
         // USA
         "CA": "California", "NY": "New York", "TX": "Texas", "FL": "Florida",
         "IL": "Illinois", "PA": "Pennsylvania", "OH": "Ohio", "GA": "Georgia",
         // UAE: Display as full names as requested
-        "DXB": "Dubai", "AUH": "Abu Dhabi", "SHJ": "Sharjah", "AJM": "Ajman", 
-        "RAK": "Ras Al Khaimah", "UAQ": "Umm Al Quwain", "FUJ": "Fujairah"
+        "DXB": "Dubai", "DUBAI": "Dubai",
+        "AUH": "Abu Dhabi", "ABU DHABI": "Abu Dhabi", 
+        "SHJ": "Sharjah", "SHARJAH": "Sharjah",
+        "AJM": "Ajman", "AJMAN": "Ajman",
+        "RAK": "Ras Al Khaimah", "RAS AL KHAIMAH": "Ras Al Khaimah",
+        "UAQ": "Umm Al Quwain", "UMM AL QUWAIN": "Umm Al Quwain",
+        "FUJ": "Fujairah", "FUJAIRAH": "Fujairah"
     };
 
     // --- State ---
